@@ -116,7 +116,36 @@ picks the exact site and confirms in their own session. It is not per-site.
 
 This means `AvailableSite.site_name`, `.price`, `.max_occupancy`, and a per-site
 `.accessible` cannot be populated from upstream the way the M1 spec assumed.
-Either M1 represents results at the campground+availability level (with accessible
-filtering and a booking link), or we invest more live reverse-engineering
-(`/api/occupancy`, `/api/attribute/getById`, a captured booking session) to
-recover per-site detail. **Open decision.**
+
+## Deep-dig results (follow-up investigation)
+
+After mining the full SPA bundle and probing the remaining endpoints live:
+
+- **Site names: not exposed.** The client keeps a resource store keyed
+  `resourceLocationId → {resourceId: {localizedValues…}}`, but the only endpoint
+  that could populate it, `GET /api/reachableresources/resourcelocationid`,
+  returned `{}` for **every** campground tested (`-2147483643/44/45/46`).
+  `mapResources` carry no names; `mapLabels` were empty; the old details endpoint
+  is gone. `GET /api/dateschedule/resourcelocationid` gives only a loop-level name
+  ("Campsites (Tunnel Mountain Trailer Court)") and season windows. [verified live]
+- **Price: not exposed.** No `price`/`fee`/`cost`/`rate`/`amount` field appears in
+  any API response or anywhere in the app bundle. [verified]
+- **Capacity: not exposed per resource.** `GET /api/occupancy` → HTTP 400 without a
+  booking context. [verified live]
+- **Accessibility filtering: NOT verified.** The "Accessible" attribute (`-32756`)
+  exists in `/api/attribute/filterable`, but adding a `filterData`
+  (`[{attributeDefinitionId:-32756, enumValues:[0]}]`) to `/api/availability/map`
+  produced an **identical** result set (87 → 87), i.e. the server ignored the
+  inferred shape. The minified bundle hides the real `filterData` encoding, and
+  guessing further means blindly probing a protected government endpoint. So we
+  currently have **no verified way to read or filter per-site accessibility** from
+  this API. [verified live — negative result]
+
+**Conclusion.** Parks Canada's current public API reliably yields: per-campground
+availability (open `resourceId`s for dates/equipment/party), a prepared
+campground-level booking deep link, and season schedules. It does **not** (as far
+as can be verified without a headless-browser capture of the real booking flow)
+expose per-site name, price, capacity, or a working accessibility filter. Since
+accessibility is the entire point of this project (Constitution Art. 3), this is a
+material limitation that needs a deliberate decision — not something to paper over
+with assumptions (Art. 7.1/7.2). **Open decision.**
