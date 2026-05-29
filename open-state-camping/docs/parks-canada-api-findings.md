@@ -141,11 +141,48 @@ After mining the full SPA bundle and probing the remaining endpoints live:
   currently have **no verified way to read or filter per-site accessibility** from
   this API. [verified live — negative result]
 
-**Conclusion.** Parks Canada's current public API reliably yields: per-campground
-availability (open `resourceId`s for dates/equipment/party), a prepared
-campground-level booking deep link, and season schedules. It does **not** (as far
-as can be verified without a headless-browser capture of the real booking flow)
-expose per-site name, price, capacity, or a working accessibility filter. Since
-accessibility is the entire point of this project (Constitution Art. 3), this is a
-material limitation that needs a deliberate decision — not something to paper over
-with assumptions (Art. 7.1/7.2). **Open decision.**
+## RESOLUTION — headless-browser capture (authorized)
+
+A single off-peak headless session of the real booking-results page revealed the
+endpoint that static bundle analysis missed, and **resolves the accessibility,
+name, and capacity gaps**. This section is the authoritative contract for the M1
+provider; the "deep-dig negative results" above are kept only as a record of what
+the direct/guessed approaches showed.
+
+- **`GET /api/resourcelocation/resources?resourceLocationId=<id>`** — the resource
+  collection, a dict keyed by `resourceId`. Each entry has: `localizedValues[].name`
+  (the **site name/number**, e.g. "101"), `minCapacity`/`maxCapacity`/`maxAdultCapacity`,
+  `definedAttributes[]` ({`attributeDefinitionId`, `values[]`}), `feeScheduleId`,
+  `allowedEquipment`, `mapIds`, `photos`. (422 resources for the test campground.)
+  [verified live]
+- **Join works perfectly:** every `resourceId` in the `/api/availability/map`
+  response is present in this collection (87/87, 0 missing). So availability
+  (open/closed) joins to name/capacity/attributes by `resourceId`. [verified live]
+- **Per-site accessibility — SOLVED:** attribute **`-32756` "Accessible"**, value
+  `0 = Yes`, `1 = No`, is present on every resource. For the test campground: 8
+  accessible sites (104, 105, 107, 109, 110, 205, 206, 208), 414 not. The Service
+  Type attribute (`-32768`, "Accessible, …" enum variants) flags the **same 8**
+  sites — a 100% cross-check. [verified live]
+- **Accessibility filtering is client-side:** the real app sends `filterData=[]`
+  and filters results in the browser using the resource attributes. So
+  `accessible_only` is implemented by reading `-32756` per site and filtering
+  locally — no server `filterData` encoding required. [verified live]
+- Confirmed availability params the SPA uses: `mapId, bookingCategoryId=0,
+  equipmentCategoryId=-32768, subEquipmentCategoryId=<equip|omit>, startDate,
+  endDate, getDailyAvailability=false, isReserving=true, filterData=[],
+  numEquipment, seed=<timestamp cache-buster>`. [verified live]
+
+### Verified data flow for `search_sites`
+
+1. `GET /api/resourcelocation/resources?resourceLocationId=<rlid>` → name, capacity,
+   accessibility (`-32756`), service type, equipment, photos per `resourceId`.
+2. `GET /api/availability/map?mapId=<rootMapId>&…&filterData=[]` → which
+   `resourceId`s are open (`availability == 0`); recurse `mapLinkAvailabilities`
+   child maps.
+3. Join on `resourceId`; if `accessible_only`, keep `-32756 == 0`.
+4. Build the campground-level booking deep link.
+
+**Outcome:** M1 can deliver real per-site results *with accessibility*, satisfying
+Constitution Art. 3. Price is still not directly verified (`feeScheduleId` would
+need a fee-schedule lookup); it stays optional/`None` for M1 and is flagged, not
+guessed (Art. 7.1).
