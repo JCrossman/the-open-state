@@ -8,11 +8,27 @@
    {
     "availability": 0,
     "remainingQuota": null
+   },
+   {
+    "availability": 0,
+    "remainingQuota": null
+   },
+   {
+    "availability": 0,
+    "remainingQuota": null
    }
   ],
-  "-2147475825": [
+  "-2147475943": [
    {
-    "availability": 5,
+    "availability": 0,
+    "remainingQuota": null
+   },
+   {
+    "availability": 0,
+    "remainingQuota": null
+   },
+   {
+    "availability": 0,
     "remainingQuota": null
    }
   ],
@@ -20,17 +36,41 @@
    {
     "availability": 0,
     "remainingQuota": null
+   },
+   {
+    "availability": 1,
+    "remainingQuota": null
+   },
+   {
+    "availability": 0,
+    "remainingQuota": null
+   }
+  ],
+  "-2147475825": [
+   {
+    "availability": 1,
+    "remainingQuota": null
+   },
+   {
+    "availability": 1,
+    "remainingQuota": null
+   },
+   {
+    "availability": 1,
+    "remainingQuota": null
    }
   ],
   "-2147475635": [
    {
-    "availability": 5,
+    "availability": 1,
     "remainingQuota": null
-   }
-  ],
-  "-2147475943": [
+   },
    {
-    "availability": 0,
+    "availability": 1,
+    "remainingQuota": null
+   },
+   {
+    "availability": 1,
     "remainingQuota": null
    }
   ]

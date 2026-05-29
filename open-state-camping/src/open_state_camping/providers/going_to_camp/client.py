@@ -37,6 +37,25 @@ SERVICE_TYPE_ATTR = -32768      # some enum values are "Accessible, ..."
 _MAX_MAP_REQUESTS = 50
 
 
+def localized(
+    values: Optional[list[dict[str, Any]]],
+    field: str,
+    prefer: tuple[str, ...] = ("en-CA", "en-US", "en"),
+) -> Any:
+    """Pull a field from a localizedValues list, preferring English.
+
+    Parks Canada returns both English and French entries; outputs are read by
+    citizens who may use a screen reader in English, so we surface the English
+    text (Constitution Art. 3.2), falling back to whatever is present.
+    """
+    values = values or []
+    for culture in prefer:
+        for value in values:
+            if value.get("cultureName") == culture:
+                return value.get(field)
+    return values[0].get(field) if values else None
+
+
 class UpstreamError(RuntimeError):
     """The booking platform returned an error or unusable response."""
 
@@ -115,11 +134,10 @@ class GoingToCampClient:
             categories = facility.get("resourceCategoryIds") or []
             if not CAMPSITE_CATEGORIES.intersection(categories):
                 continue
-            localized = facility.get("localizedValues") or [{}]
             campgrounds.append(
                 {
                     "resource_location_id": facility.get("resourceLocationId"),
-                    "name": localized[0].get("fullName"),
+                    "name": localized(facility.get("localizedValues"), "fullName"),
                     "root_map_id": facility.get("rootMapId"),
                 }
             )
@@ -131,11 +149,10 @@ class GoingToCampClient:
         types: list[dict[str, Any]] = []
         for category in data or []:
             for sub in category.get("subEquipmentCategories") or []:
-                localized = sub.get("localizedValues") or [{}]
                 types.append(
                     {
                         "equipment_id": sub.get("subEquipmentCategoryId"),
-                        "name": localized[0].get("name"),
+                        "name": localized(sub.get("localizedValues"), "name"),
                     }
                 )
         return types
@@ -157,23 +174,17 @@ class GoingToCampClient:
         # Be tolerant if a future version returns a list.
         return {str(r.get("resourceId")): r for r in (data or [])}
 
-    def service_type_labels(self) -> dict[int, str]:
-        """Map Service Type enum values to plain-language labels.
+    def attribute_definitions(self) -> dict[str, Any]:
+        """Return the filterable attribute dictionary, keyed by attribute id (str).
 
-        Used to describe a site (e.g. "Accessible, Electricity with on-site Fire
-        Pit") in words a citizen can understand (Constitution Art. 3).
+        Each definition has a localized display name and enum value labels, used
+        to describe sites (service type, amenities, accessibility) in plain
+        language (Constitution Art. 3).
         """
         data = self._get("/api/attribute/filterable")
-        attribute = data.get(str(SERVICE_TYPE_ATTR)) if isinstance(data, dict) else None
-        labels: dict[int, str] = {}
-        for value in (attribute or {}).get("values") or []:
-            localized = value.get("localizedValues") or [{}]
-            enum_value = value.get("enumValue")
-            if enum_value is not None:
-                labels[enum_value] = localized[0].get("displayName")
-        return labels
+        return data if isinstance(data, dict) else {}
 
-    def available_resource_ids(
+    def daily_availability(
         self,
         *,
         root_map_id: int | str,
@@ -181,14 +192,18 @@ class GoingToCampClient:
         start_date: _dt.date,
         end_date: _dt.date,
         equipment_id: Optional[int] = None,
-    ) -> set[str]:
-        """Return the set of resourceIds open for the stay.
+    ) -> dict[str, list[Optional[int]]]:
+        """Return per-day availability for each site over the stay window.
 
-        Walks the campground's map tree (the root map links to child maps that
-        hold the actual sites) and collects resources whose availability is 0
-        (open). Read-only; never holds or books a site.
+        Walks the campground's map tree (root map links to child maps that hold
+        the actual sites) and returns, per ``resourceId``, the list of per-day
+        availability codes the platform reports (0 = open that day). One request
+        per map - the same upstream cost as a single-window check - so
+        nights/weekends filtering is computed locally, not by hammering the
+        API with many windowed queries (Constitution Art. 7.3). Read-only;
+        never holds or books a site.
         """
-        available: set[str] = set()
+        result: dict[str, list[Optional[int]]] = {}
         visited: set[str] = set()
         to_visit: list[str] = [str(root_map_id)]
         requests_made = 0
@@ -208,15 +223,15 @@ class GoingToCampClient:
                     map_id, resource_location_id, start_date, end_date, equipment_id
                 ),
             )
-            resource_availabilities = data.get("resourceAvailabilities") or {}
-            for resource_id, slots in resource_availabilities.items():
-                if slots and slots[0].get("availability") == 0:
-                    available.add(str(resource_id))
+            for resource_id, slots in (data.get("resourceAvailabilities") or {}).items():
+                result[str(resource_id)] = [
+                    slot.get("availability") for slot in (slots or [])
+                ]
             for child_map_id in (data.get("mapLinkAvailabilities") or {}):
                 if str(child_map_id) not in visited:
                     to_visit.append(str(child_map_id))
 
-        return available
+        return result
 
     @staticmethod
     def _availability_params(
@@ -233,7 +248,7 @@ class GoingToCampClient:
             "equipmentCategoryId": NON_GROUP_EQUIPMENT,
             "startDate": start_date.isoformat(),
             "endDate": end_date.isoformat(),
-            "getDailyAvailability": "false",
+            "getDailyAvailability": "true",
             "isReserving": "true",
             "filterData": "[]",
             "numEquipment": 1,
