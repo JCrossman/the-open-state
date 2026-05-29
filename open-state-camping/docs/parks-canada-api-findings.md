@@ -186,3 +186,25 @@ the direct/guessed approaches showed.
 Constitution Art. 3. Price is still not directly verified (`feeScheduleId` would
 need a fee-schedule lookup); it stays optional/`None` for M1 and is flagged, not
 guessed (Art. 7.1).
+
+## Price investigation (resolved — no read-only source)
+
+A second authorized headless session loaded the results page for a window with
+availability and recorded every `/api` **response body**, then attempted a
+read-only list/site selection. Findings:
+
+- The results page makes ~32 distinct read-only calls; **none return a per-site
+  price.** (`ratecategory/ratecategories` returns category names like "Full",
+  no amounts; the only "price" token in any body was config inside
+  `/api/transactionlocation`.)
+- In the app bundle, price appears only as **cart line-item** fields built from
+  product versions: `price.preTaxUnitPrice`, `lineItemPrice`, `getTotalFees`.
+  These are populated when a site is added toward a cart (`/api/cart`), i.e.
+  inside the booking flow.
+
+**Conclusion:** there is no read-only "price for site X on dates Y" endpoint.
+Obtaining a price requires entering the cart/booking flow (a consequential,
+potentially inventory-holding action) which we deliberately do not perform
+(Constitution Art. 2.2 / 2.4). Therefore `AvailableSite.price` stays `None` by
+design; the citizen sees the price in their own session via the prepared booking
+link (prepare-then-confirm). This is a principled limit, not a missing feature.
