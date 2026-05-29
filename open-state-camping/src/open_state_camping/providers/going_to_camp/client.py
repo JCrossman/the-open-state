@@ -1,0 +1,302 @@
+"""Thin HTTP client for the GoingToCamp / Camis platform (Parks Canada).
+
+Implements the endpoint contract verified live in
+docs/parks-canada-api-findings.md. This client only *reads* public availability
+and resource data and *builds* a booking deep link the citizen confirms
+themselves. It never logs in, books, pays, or handles citizen credentials
+(Constitution Articles 1 and 2).
+
+Failures are surfaced as typed errors so callers can fail visibly rather than
+guess (Constitution Art. 7.2).
+"""
+
+from __future__ import annotations
+
+import datetime as _dt
+from typing import Any, Iterable, Optional
+
+import httpx
+
+# --- Platform constants (verified against the live API) ---------------------
+
+# Resource categories that represent reservable campsites.
+CAMP_SITE = -2147483648
+OVERFLOW_SITE = -2147483647
+GROUP_SITE = -2147483643
+CAMPSITE_CATEGORIES = frozenset({CAMP_SITE, OVERFLOW_SITE, GROUP_SITE})
+
+# The non-group equipment category id used by the availability and booking calls.
+NON_GROUP_EQUIPMENT = -32768
+
+# Attribute definitions used for accessibility (see findings doc).
+ACCESSIBLE_ATTR = -32756        # value 0 = Yes (accessible), 1 = No
+SERVICE_TYPE_ATTR = -32768      # some enum values are "Accessible, ..."
+
+# Recursion safety: a single campground search should never fan out beyond this
+# many map requests (politeness + loop guard).
+_MAX_MAP_REQUESTS = 50
+
+
+class UpstreamError(RuntimeError):
+    """The booking platform returned an error or unusable response."""
+
+
+class QueueItError(UpstreamError):
+    """The platform is gating traffic through a Queue-it virtual waiting room.
+
+    On launch days both Parks Canada and Alberta use Queue-it. We never try to
+    defeat it; we detect it and surface it as a clear status so the citizen
+    knows to wait (docs/01-architecture.md "Upstream politeness").
+    """
+
+
+class GoingToCampClient:
+    """Read-only client for one GoingToCamp host (e.g. reservation.pc.gc.ca)."""
+
+    def __init__(
+        self,
+        hostname: str,
+        *,
+        user_agent: str,
+        timeout: float = 30.0,
+        http_client: Optional[httpx.Client] = None,
+    ) -> None:
+        self.hostname = hostname
+        self._base = f"https://{hostname}"
+        # An injected client (e.g. with a MockTransport) makes the provider
+        # fully testable offline, with no live network calls in CI.
+        self._client = http_client or httpx.Client(
+            timeout=timeout,
+            follow_redirects=True,
+            headers={
+                "User-Agent": user_agent,
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Language": "en-CA,en;q=0.9",
+                "Referer": f"{self._base}/",
+            },
+        )
+
+    # -- low-level ----------------------------------------------------------
+
+    def _get(self, path: str, params: Optional[dict[str, Any]] = None) -> Any:
+        try:
+            resp = self._client.get(f"{self._base}{path}", params=params)
+        except httpx.HTTPError as exc:  # network/timeout
+            raise UpstreamError(
+                f"Could not reach the Parks Canada booking system ({exc})."
+            ) from exc
+
+        # Queue-it sends the browser to a *.queue-it.net waiting room.
+        if "queue-it.net" in str(resp.url):
+            raise QueueItError(
+                "Parks Canada is using a virtual waiting room right now. "
+                "Please try again shortly."
+            )
+        if resp.status_code >= 400:
+            raise UpstreamError(
+                f"The Parks Canada booking system returned an error "
+                f"(HTTP {resp.status_code}) for {path}."
+            )
+        try:
+            return resp.json()
+        except ValueError as exc:
+            raise UpstreamError(
+                f"The Parks Canada booking system returned an unexpected "
+                f"response for {path}."
+            ) from exc
+
+    # -- endpoints ----------------------------------------------------------
+
+    def list_campgrounds(self) -> list[dict[str, Any]]:
+        """Return reservable campgrounds: id, name, and root map id."""
+        data = self._get("/api/resourceLocation")
+        campgrounds = []
+        for facility in data or []:
+            categories = facility.get("resourceCategoryIds") or []
+            if not CAMPSITE_CATEGORIES.intersection(categories):
+                continue
+            localized = facility.get("localizedValues") or [{}]
+            campgrounds.append(
+                {
+                    "resource_location_id": facility.get("resourceLocationId"),
+                    "name": localized[0].get("fullName"),
+                    "root_map_id": facility.get("rootMapId"),
+                }
+            )
+        return campgrounds
+
+    def list_equipment_types(self) -> list[dict[str, Any]]:
+        """Return equipment types: per-area subEquipmentCategoryId + name."""
+        data = self._get("/api/equipment")
+        types: list[dict[str, Any]] = []
+        for category in data or []:
+            for sub in category.get("subEquipmentCategories") or []:
+                localized = sub.get("localizedValues") or [{}]
+                types.append(
+                    {
+                        "equipment_id": sub.get("subEquipmentCategoryId"),
+                        "name": localized[0].get("name"),
+                    }
+                )
+        return types
+
+    def get_resources(self, resource_location_id: int | str) -> dict[str, dict[str, Any]]:
+        """Return the resource collection for a campground, keyed by resourceId.
+
+        Each resource carries its name, capacity, accessibility attribute
+        (-32756) and service type. This is how we obtain per-site name and
+        accessibility (the old per-site details endpoint was removed upstream).
+        """
+        data = self._get(
+            "/api/resourcelocation/resources",
+            params={"resourceLocationId": resource_location_id},
+        )
+        # The API returns a dict keyed by resourceId.
+        if isinstance(data, dict):
+            return {str(k): v for k, v in data.items()}
+        # Be tolerant if a future version returns a list.
+        return {str(r.get("resourceId")): r for r in (data or [])}
+
+    def service_type_labels(self) -> dict[int, str]:
+        """Map Service Type enum values to plain-language labels.
+
+        Used to describe a site (e.g. "Accessible, Electricity with on-site Fire
+        Pit") in words a citizen can understand (Constitution Art. 3).
+        """
+        data = self._get("/api/attribute/filterable")
+        attribute = data.get(str(SERVICE_TYPE_ATTR)) if isinstance(data, dict) else None
+        labels: dict[int, str] = {}
+        for value in (attribute or {}).get("values") or []:
+            localized = value.get("localizedValues") or [{}]
+            enum_value = value.get("enumValue")
+            if enum_value is not None:
+                labels[enum_value] = localized[0].get("displayName")
+        return labels
+
+    def available_resource_ids(
+        self,
+        *,
+        root_map_id: int | str,
+        resource_location_id: int | str,
+        start_date: _dt.date,
+        end_date: _dt.date,
+        equipment_id: Optional[int] = None,
+    ) -> set[str]:
+        """Return the set of resourceIds open for the stay.
+
+        Walks the campground's map tree (the root map links to child maps that
+        hold the actual sites) and collects resources whose availability is 0
+        (open). Read-only; never holds or books a site.
+        """
+        available: set[str] = set()
+        visited: set[str] = set()
+        to_visit: list[str] = [str(root_map_id)]
+        requests_made = 0
+
+        while to_visit:
+            map_id = to_visit.pop()
+            if map_id in visited:
+                continue
+            visited.add(map_id)
+            requests_made += 1
+            if requests_made > _MAX_MAP_REQUESTS:
+                break
+
+            data = self._get(
+                "/api/availability/map",
+                params=self._availability_params(
+                    map_id, resource_location_id, start_date, end_date, equipment_id
+                ),
+            )
+            resource_availabilities = data.get("resourceAvailabilities") or {}
+            for resource_id, slots in resource_availabilities.items():
+                if slots and slots[0].get("availability") == 0:
+                    available.add(str(resource_id))
+            for child_map_id in (data.get("mapLinkAvailabilities") or {}):
+                if str(child_map_id) not in visited:
+                    to_visit.append(str(child_map_id))
+
+        return available
+
+    @staticmethod
+    def _availability_params(
+        map_id: int | str,
+        resource_location_id: int | str,
+        start_date: _dt.date,
+        end_date: _dt.date,
+        equipment_id: Optional[int],
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {
+            "mapId": map_id,
+            "resourceLocationId": resource_location_id,
+            "bookingCategoryId": 0,
+            "equipmentCategoryId": NON_GROUP_EQUIPMENT,
+            "startDate": start_date.isoformat(),
+            "endDate": end_date.isoformat(),
+            "getDailyAvailability": "false",
+            "isReserving": "true",
+            "filterData": "[]",
+            "numEquipment": 1,
+        }
+        if equipment_id is not None:
+            params["subEquipmentCategoryId"] = equipment_id
+        return params
+
+    def build_booking_url(
+        self,
+        *,
+        map_id: int | str,
+        resource_location_id: int | str,
+        start_date: _dt.date,
+        end_date: _dt.date,
+        party_size: int,
+        equipment_id: Optional[int] = None,
+    ) -> str:
+        """Build the campground-level deep link the citizen opens to book.
+
+        Prefills the campground, dates, party size and equipment. The citizen
+        chooses the exact site and confirms in their own session; this never
+        books (Constitution Art. 2).
+        """
+        sub_equipment = "" if equipment_id is None else equipment_id
+        return (
+            f"{self._base}/create-booking/results"
+            f"?mapId={map_id}"
+            "&bookingCategoryId=0"
+            f"&startDate={start_date.isoformat()}"
+            f"&endDate={end_date.isoformat()}"
+            "&isReserving=true"
+            f"&equipmentId={NON_GROUP_EQUIPMENT}"
+            f"&subEquipmentId={sub_equipment}"
+            f"&partySize={party_size}"
+            f"&resourceLocationId={resource_location_id}"
+        )
+
+    def close(self) -> None:
+        self._client.close()
+
+
+def resource_is_accessible(resource: dict[str, Any]) -> bool:
+    """Return True if a resource record is marked accessible.
+
+    Reads the "Accessible" attribute (-32756, value 0 = Yes), verified against
+    the live data and cross-checked with the Service Type attribute. This is the
+    first-class accessibility signal (Constitution Art. 3).
+    """
+    for attribute in resource.get("definedAttributes") or []:
+        if attribute.get("attributeDefinitionId") == ACCESSIBLE_ATTR:
+            values = attribute.get("values")
+            if values is None and attribute.get("value") is not None:
+                values = [attribute["value"]]
+            return 0 in (values or [])
+    return False
+
+
+def _attr_values(resource: dict[str, Any], attribute_id: int) -> Iterable[int]:
+    for attribute in resource.get("definedAttributes") or []:
+        if attribute.get("attributeDefinitionId") == attribute_id:
+            values = attribute.get("values")
+            if values is None and attribute.get("value") is not None:
+                values = [attribute["value"]]
+            return values or []
+    return []

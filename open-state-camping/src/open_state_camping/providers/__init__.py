@@ -13,12 +13,14 @@ from open_state_camping.providers.base import (
     RecreationArea,
     SiteDetails,
 )
+from open_state_camping.providers.parks_canada import ParksCanadaProvider
 
 __all__ = [
     "AvailableSite",
     "Campground",
     "CampingProvider",
     "EquipmentType",
+    "ParksCanadaProvider",
     "RecreationArea",
     "SiteDetails",
 ]

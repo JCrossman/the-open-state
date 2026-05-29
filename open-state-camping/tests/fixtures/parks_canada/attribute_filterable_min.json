@@ -1,0 +1,972 @@
+{
+ "-32768": {
+  "isMultiSelect": false,
+  "defaultSearchFilterEnumValue": null,
+  "values": [
+   {
+    "enumValue": 0,
+    "order": 1,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Unserviced with on-site Fire Pit"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Sans services, avec foyer"
+     }
+    ]
+   },
+   {
+    "enumValue": 1,
+    "order": 2,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Unserviced with on-site Fire Pit (Fire Permit Added)"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Sans services, avec foyer (permis de feu ajout\u00e9)"
+     }
+    ]
+   },
+   {
+    "enumValue": 2,
+    "order": 3,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Unserviced with on-site Fire Pit \u2013 Family Area"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Sans services, avec foyer \u2013 aire familiale"
+     }
+    ]
+   },
+   {
+    "enumValue": 3,
+    "order": 4,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Unserviced with on-site Fire Pit \u2013 Ocean View"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Sans services, avec foyer \u2013 vue sur l\u2019oc\u00e9an"
+     }
+    ]
+   },
+   {
+    "enumValue": 4,
+    "order": 5,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Unserviced without on-site Fire Pit"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Sans services, sans foyer"
+     }
+    ]
+   },
+   {
+    "enumValue": 5,
+    "order": 6,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Unserviced without on-site Fire Pit \u2013 Ocean View"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Sans services, sans foyer \u2013 vue sur l\u2019oc\u00e9an"
+     }
+    ]
+   },
+   {
+    "enumValue": 6,
+    "order": 7,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Accessible, Unserviced with on-site Fire Pit"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Accessibles, sans services, avec foyer"
+     }
+    ]
+   },
+   {
+    "enumValue": 7,
+    "order": 8,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Accessible, Unserviced without on-site Fire Pit"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Accessibles, sans services, sans foyer"
+     }
+    ]
+   },
+   {
+    "enumValue": 8,
+    "order": 9,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Accessible, Unserviced with on-site Fire Pit (Fire Permit Added)"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Accessibles, sans services, avec foyer (permis de feu ajout\u00e9)"
+     }
+    ]
+   },
+   {
+    "enumValue": 9,
+    "order": 10,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Walk-in, Unserviced with on-site Fire Pit"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Acc\u00e8s pi\u00e9ton, sans services, avec foyer"
+     }
+    ]
+   },
+   {
+    "enumValue": 10,
+    "order": 11,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Walk-in, Unserviced without on-site Fire Pit"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Acc\u00e8s pi\u00e9ton, sans services, sans foyer"
+     }
+    ]
+   },
+   {
+    "enumValue": 11,
+    "order": 12,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Walk-in, Unserviced with on-site Fire Pit (Fire Permit Added)"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Acc\u00e8s pi\u00e9ton, sans services, avec foyer (permis de feu ajout\u00e9)"
+     }
+    ]
+   },
+   {
+    "enumValue": 12,
+    "order": 13,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Accessible, Walk-in Unserviced with on-site Fire Pit"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Accessibles, Acc\u00e8s pi\u00e9ton sans services, avec foyer"
+     }
+    ]
+   },
+   {
+    "enumValue": 13,
+    "order": 14,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Accessible, Walk-in Unserviced without on-site Fire Pit"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Accessibles, Acc\u00e8s pi\u00e9ton sans services, sans foyer"
+     }
+    ]
+   },
+   {
+    "enumValue": 14,
+    "order": 15,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Walk-in, Electricity with on-site Fire Pit"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Acc\u00e8s pi\u00e9ton, avec \u00e9lectricit\u00e9, avec foyer"
+     }
+    ]
+   },
+   {
+    "enumValue": 15,
+    "order": 16,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Walk-in, Electricity with on-site Fire Pit (Fire Permit Added)"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Acc\u00e8s pi\u00e9ton, avec \u00e9lectricit\u00e9, avec foyer (permis de feu ajout\u00e9)"
+     }
+    ]
+   },
+   {
+    "enumValue": 16,
+    "order": 17,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Walk-in, Electricity without on-site Fire Pit"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Acc\u00e8s pi\u00e9ton, avec \u00e9lectricit\u00e9, sans foyer"
+     }
+    ]
+   },
+   {
+    "enumValue": 17,
+    "order": 18,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Overflow"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Surplus"
+     }
+    ]
+   },
+   {
+    "enumValue": 18,
+    "order": 19,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Electricity with on-site Fire Pit"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "\u00c9lectricit\u00e9, avec foyer"
+     }
+    ]
+   },
+   {
+    "enumValue": 19,
+    "order": 20,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Electricity with on-site Fire Pit (Fire Permit Added)"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "\u00c9lectricit\u00e9, avec foyer (permis de feu ajout\u00e9)"
+     }
+    ]
+   },
+   {
+    "enumValue": 20,
+    "order": 21,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Electricity without on-site Fire Pit"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "\u00c9lectricit\u00e9, sans foyer"
+     }
+    ]
+   },
+   {
+    "enumValue": 21,
+    "order": 22,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Accessible, Electricity with on-site Fire Pit"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Accessibles, avec \u00e9lectricit\u00e9, avec foyer"
+     }
+    ]
+   },
+   {
+    "enumValue": 22,
+    "order": 23,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Accessible, Electricity with on-site Fire Pit (Fire Permit Added)"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Accessibles, avec \u00e9lectricit\u00e9, avec foyer (permis de feu ajout\u00e9)"
+     }
+    ]
+   },
+   {
+    "enumValue": 23,
+    "order": 24,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Accessible, Electricity without on-site Fire Pit"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Accessibles, avec \u00e9lectricit\u00e9, sans foyer"
+     }
+    ]
+   },
+   {
+    "enumValue": 24,
+    "order": 25,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Electricity and Water with on-site Fire Pit"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "\u00c9lectricit\u00e9 et eau, avec foyer"
+     }
+    ]
+   },
+   {
+    "enumValue": 25,
+    "order": 26,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Electricity and Water without on-site Fire Pit"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "\u00c9lectricit\u00e9 et eau, sans foyer"
+     }
+    ]
+   },
+   {
+    "enumValue": 26,
+    "order": 27,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Accessible, Electricity and Water with on-site Fire Pit"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Accessibles, avec \u00e9lectricit\u00e9 et eau, avec foyer"
+     }
+    ]
+   },
+   {
+    "enumValue": 27,
+    "order": 28,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Accessible, Electricity and Water without on-site Fire Pit"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Accessibles, avec \u00e9lectricit\u00e9 et eau, sans foyer"
+     }
+    ]
+   },
+   {
+    "enumValue": 28,
+    "order": 29,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Electricity, Water and Sewer with on-site Fire Pit"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "\u00c9lectricit\u00e9, eau et \u00e9gout, avec foyer"
+     }
+    ]
+   },
+   {
+    "enumValue": 29,
+    "order": 30,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Electricity, Water and Sewer with on-site Fire Pit (Fire Permit Added)"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "\u00c9lectricit\u00e9, eau et \u00e9gout,  avec foyer (permis de feu ajout\u00e9)"
+     }
+    ]
+   },
+   {
+    "enumValue": 30,
+    "order": 31,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Electricity, Water and Sewer without on-site Fire Pit"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "\u00c9lectricit\u00e9, eau et \u00e9gout, sans foyer"
+     }
+    ]
+   },
+   {
+    "enumValue": 31,
+    "order": 32,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Accessible, Electricity, Water and Sewer with on-site Fire Pit"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Accessibles, avec \u00e9lectricit\u00e9, eau et \u00e9gout, avec foyer"
+     }
+    ]
+   },
+   {
+    "enumValue": 32,
+    "order": 33,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Accessible, Electricity, Water and Sewer without on-site Fire Pit"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Accessibles, avec \u00e9lectricit\u00e9, eau et \u00e9gout, sans foyer"
+     }
+    ]
+   },
+   {
+    "enumValue": 33,
+    "order": 34,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Primitive with on-site Fire Pit"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "\u00c0 l'\u00e9tat naturel, avec foyer"
+     }
+    ]
+   },
+   {
+    "enumValue": 34,
+    "order": 35,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Primitive with on-site Fire Pit (Fire Permit Added)"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "\u00c0 l'\u00e9tat naturel, avec foyer (permis de feu ajout\u00e9)"
+     }
+    ]
+   },
+   {
+    "enumValue": 35,
+    "order": 36,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Primitive without on-site Fire Pit"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "\u00c0 l'\u00e9tat naturel, sans foyer"
+     }
+    ]
+   },
+   {
+    "enumValue": 36,
+    "order": 37,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Primitive, walk-in with on-site Fire Pit"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "\u00c0 l'\u00e9tat naturel, acc\u00e8s pi\u00e9ton avec foyer"
+     }
+    ]
+   },
+   {
+    "enumValue": 37,
+    "order": 39,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Primitive, walk-in without on-site Fire Pit"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "\u00c0 l'\u00e9tat naturel, acc\u00e8s pi\u00e9ton sans foyer"
+     }
+    ]
+   },
+   {
+    "enumValue": 38,
+    "order": 40,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Yurt"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Yourte"
+     }
+    ]
+   },
+   {
+    "enumValue": 39,
+    "order": 41,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Cabin"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Chalet"
+     }
+    ]
+   },
+   {
+    "enumValue": 40,
+    "order": 42,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Rustic Cabin"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Chalet rustique"
+     }
+    ]
+   },
+   {
+    "enumValue": 41,
+    "order": 44,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "\u00d4asis"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "\u00d4asis"
+     }
+    ]
+   },
+   {
+    "enumValue": 42,
+    "order": 43,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "oTENTik"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "oTENTik"
+     }
+    ]
+   },
+   {
+    "enumValue": 43,
+    "order": 45,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "MicrOcube"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "MicrOcube"
+     }
+    ]
+   },
+   {
+    "enumValue": 44,
+    "order": 46,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Equipped Camping"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Camping tout \u00e9quip\u00e9"
+     }
+    ]
+   },
+   {
+    "enumValue": 45,
+    "order": 49,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Group"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Groupe"
+     }
+    ]
+   },
+   {
+    "enumValue": 47,
+    "order": 53,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Event"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "\u00c9v\u00e9nement"
+     }
+    ]
+   },
+   {
+    "enumValue": 48,
+    "order": 50,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Access Point"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Point d\u2019acc\u00e8s"
+     }
+    ]
+   },
+   {
+    "enumValue": 49,
+    "order": 52,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Backcountry"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Arri\u00e8re-pays"
+     }
+    ]
+   },
+   {
+    "enumValue": 50,
+    "order": 54,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Backcountry Cabin"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Chalet en arri\u00e8re-pays"
+     }
+    ]
+   },
+   {
+    "enumValue": 51,
+    "order": 51,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Backcountry Yurt"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Yourte en arri\u00e8re-pays"
+     }
+    ]
+   },
+   {
+    "enumValue": 52,
+    "order": 55,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Backcountry Zone"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Zone d'arri\u00e8re-pays"
+     }
+    ]
+   },
+   {
+    "enumValue": 53,
+    "order": 56,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Backcountry Zone Shelter"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Abri en zone d'arri\u00e8re-pays"
+     }
+    ]
+   },
+   {
+    "enumValue": 54,
+    "order": 48,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Teepee"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Tipi"
+     }
+    ]
+   },
+   {
+    "enumValue": 55,
+    "order": 47,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Prospector Tent"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Tente de prospecteur"
+     }
+    ]
+   },
+   {
+    "enumValue": 56,
+    "order": 38,
+    "isActive": true,
+    "icon": "",
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Primitive, walk-in with on-site Fire Pit (Fire Permit Added)"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "\u00c0 l'\u00e9tat naturel, acc\u00e8s pi\u00e9ton avec foyer (permis de feu ajout\u00e9)"
+     }
+    ]
+   }
+  ],
+  "attributeDefinitionId": -32768,
+  "attributeType": 0,
+  "order": 7,
+  "isFilterable": false,
+  "isDisabled": false,
+  "localizedValues": [
+   {
+    "cultureName": "en-CA",
+    "displayName": "Service Type"
+   },
+   {
+    "cultureName": "fr-CA",
+    "displayName": "Type d'emplacement"
+   }
+  ]
+ },
+ "-32756": {
+  "isMultiSelect": false,
+  "defaultSearchFilterEnumValue": 1,
+  "values": [
+   {
+    "enumValue": 0,
+    "order": 1,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "Yes"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Oui"
+     }
+    ]
+   },
+   {
+    "enumValue": 1,
+    "order": 2,
+    "isActive": true,
+    "icon": null,
+    "localizedValues": [
+     {
+      "cultureName": "en-CA",
+      "displayName": "No"
+     },
+     {
+      "cultureName": "fr-CA",
+      "displayName": "Non"
+     }
+    ]
+   }
+  ],
+  "attributeDefinitionId": -32756,
+  "attributeType": 0,
+  "order": 12,
+  "isFilterable": true,
+  "isDisabled": false,
+  "localizedValues": [
+   {
+    "cultureName": "en-CA",
+    "displayName": "Accessible"
+   },
+   {
+    "cultureName": "fr-CA",
+    "displayName": "Accessible"
+   }
+  ]
+ }
+}

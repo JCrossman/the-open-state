@@ -185,11 +185,20 @@ class CampingProvider(ABC):
         """
 
     @abstractmethod
-    def site_details(self, recreation_area_id: str, campsite_id: str) -> SiteDetails:
+    def site_details(
+        self,
+        *,
+        recreation_area_id: str,
+        campground_id: str,
+        campsite_id: str,
+    ) -> SiteDetails:
         """Get full, plain-language detail for one campsite.
 
-        Includes description, amenities, photos, and accessibility notes stated
-        in plain words.
+        Includes capacity, accessibility notes stated in plain words, and photos.
+        ``campground_id`` is required because platforms expose site detail per
+        campground, not globally (verified for Parks Canada; the per-site detail
+        endpoint camply used was removed upstream — see
+        docs/parks-canada-api-findings.md).
         """
 
     @abstractmethod
