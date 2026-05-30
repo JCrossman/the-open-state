@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "open-state-camping": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "open-state-camping",
+        "python",
+        "-m",
+        "open_state_camping.server"
+      ]
+    }
+  }
+}
