@@ -25,11 +25,11 @@ param namePrefix string = 'openstate'
 @description('Container image reference in the ACR, e.g. <acr>.azurecr.io/open-state-camping:<tag>. Empty on first pass deploys a placeholder so the image can be pushed, then redeploy.')
 param containerImage string = ''
 
-@description('Requests per second for the global rate limit (upstream politeness, Art. 7.3).')
-param rateLimitRps string = '5'
+@description('Requests per second for the global rate limit (upstream politeness, Art. 7.3). Tuned low for the unauthenticated public preview; a normal search flow is ~4 calls.')
+param rateLimitRps string = '3'
 
 @description('Burst capacity for the global rate limit.')
-param rateLimitBurst string = '20'
+param rateLimitBurst string = '10'
 
 @description('Max replicas. Min is fixed at 0 so the preview scales to zero when idle.')
 @minValue(1)

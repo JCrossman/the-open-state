@@ -76,7 +76,39 @@ OPEN_STATE_TRANSPORT=http OPEN_STATE_PORT=8765 uv run python -m open_state_campi
 
 The alert poller runs in the server's lifespan (always-on while the process is
 up), and `stateless_http` is on by default so multiple replicas won't break
-sessions. Hosting and OAuth land later in M2; today this is local only.
+sessions.
+
+### Hosted read-only preview (live)
+
+A read-only, unauthenticated preview is deployed to Azure Container Apps. It
+exposes the five public-data, prepare-only tools (`search_parks`,
+`list_equipment_types`, `search_sites`, `get_site_details`,
+`prepare_booking_url`); the alert tools and the poller are turned off
+(`OPEN_STATE_ENABLE_ALERTS=false`), so it scales to zero when idle and stores
+nothing about anyone. Add it to Claude as a custom connector (no auth needed):
+
+```
+https://openstate-camping.thankfulsmoke-6af0ea17.canadacentral.azurecontainerapps.io/mcp
+```
+
+The first request after an idle period cold-starts the container, so it may take
+a few seconds. The reasoning for keeping alerts out of the public preview — and
+why a full open deployment would be unsafe without auth — is in
+[`../docs/m2-validation-findings.md`](../docs/m2-validation-findings.md). The
+infrastructure-as-code and deploy steps live in [`infra/`](infra/).
+
+#### Rate limiting
+
+Because the preview is an unauthenticated public proxy to the Parks Canada
+reservation system, an HTTP deployment applies a **global** rate limit
+(`OPEN_STATE_RATE_LIMIT_RPS` / `_BURST`) to stay a polite upstream guest
+(Constitution Art. 7.3). The limit is a single shared bucket rather than
+per-client, because all Claude connections originate from one Anthropic IP range
+(`160.79.104.0/21`), so per-IP limiting would not distinguish callers. The live
+preview runs at **3 req/s, burst 10** — comfortably above a normal search flow
+(roughly four calls: find park → search sites → details → prepare link) while
+capping abusive bursts. A flood beyond the burst receives a clear
+"Global rate limit exceeded" error.
 
 ## Connect it to Claude Desktop
 
@@ -157,6 +189,9 @@ All optional, via environment variables:
 | `OPEN_STATE_HOST` / `OPEN_STATE_PORT` | `127.0.0.1` / `8000` | Bind address for `http` transport. |
 | `OPEN_STATE_MCP_PATH` | `/mcp` | Path the MCP endpoint is served at (`http` transport). |
 | `OPEN_STATE_STATELESS_HTTP` | `true` | Stateless HTTP so multiple replicas don't break sessions. |
+| `OPEN_STATE_ENABLE_ALERTS` | `true` | When `false`, the alert tools are hidden and the poller does not run — used for the unauthenticated read-only preview. |
+| `OPEN_STATE_RATE_LIMIT_RPS` | `5` | Global requests/sec for the `http` transport (`<= 0` disables). A single shared bucket: all Claude traffic arrives from one IP range, so the limit is global, not per-client. |
+| `OPEN_STATE_RATE_LIMIT_BURST` | `20` | Burst capacity above the steady rate. |
 
 ## Tests
 
