@@ -29,8 +29,10 @@ from typing import Optional
 
 from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
-from open_state_camping.alerts import AlertPoller, AlertStore
+from open_state_camping.alerts import AlertPoller, AlertStore, build_store
 from open_state_camping.config import Config
 from open_state_camping.notify import generate_channel, send_message
 from open_state_camping.providers.going_to_camp.client import QueueItError, UpstreamError
@@ -64,6 +66,12 @@ async def _lifespan(_app: FastMCP):
 
 mcp = FastMCP("Open State: Camping", lifespan=_lifespan)
 
+
+@mcp.custom_route("/health", methods=["GET"])
+async def health(_request: Request) -> JSONResponse:
+    """Liveness probe, separate from /mcp and unauthenticated (M2 hosting)."""
+    return JSONResponse({"status": "ok", "service": "open-state-camping"})
+
 _INDEPENDENCE_NOTE = (
     "The Open State is an independent public-interest tool. It is not operated by "
     "or endorsed by Parks Canada."
@@ -82,10 +90,11 @@ def get_provider() -> ParksCanadaProvider:
 
 
 def get_store() -> AlertStore:
-    """Build the alert store on first use."""
+    """Build the alert store on first use, selecting the configured backend."""
     global _store
     if _store is None:
-        _store = AlertStore(Config.from_env().alert_db_path)
+        config = Config.from_env()
+        _store = build_store(config.alert_backend, config.alert_db_path)
     return _store
 
 
@@ -525,7 +534,15 @@ def main() -> None:
     """Run the MCP server. Defaults to stdio (M1); HTTP is selected via env (M2+)."""
     config = Config.from_env()
     if config.transport == "http":
-        mcp.run(transport="http")
+        # Streamable HTTP at /mcp; /health is served alongside for probes.
+        # stateless_http keeps multi-replica hosting (M2) from breaking sessions.
+        mcp.run(
+            transport="http",
+            host=config.host,
+            port=config.port,
+            path=config.mcp_path,
+            stateless_http=config.stateless_http,
+        )
     else:
         mcp.run()
 

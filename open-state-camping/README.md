@@ -63,6 +63,21 @@ at the tools directly, use the MCP Inspector:
 npx @modelcontextprotocol/inspector uv run python -m open_state_camping.server
 ```
 
+## Run (remote, HTTP) — M2, in progress
+
+The same tools also serve over **Streamable HTTP**, the transport a hosted,
+one-click connector will use. Flip the env switch:
+
+```bash
+OPEN_STATE_TRANSPORT=http OPEN_STATE_PORT=8765 uv run python -m open_state_camping.server
+# MCP endpoint:  http://127.0.0.1:8765/mcp
+# Liveness:      http://127.0.0.1:8765/health  -> {"status":"ok",...}
+```
+
+The alert poller runs in the server's lifespan (always-on while the process is
+up), and `stateless_http` is on by default so multiple replicas won't break
+sessions. Hosting and OAuth land later in M2; today this is local only.
+
 ## Connect it to Claude Desktop
 
 Add this to your `claude_desktop_config.json`, using **absolute** paths (Claude
@@ -132,12 +147,16 @@ All optional, via environment variables:
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `OPEN_STATE_TRANSPORT` | `stdio` | `stdio` (M1) or `http` (forward-looking; M2 adds hosting + auth). |
+| `OPEN_STATE_TRANSPORT` | `stdio` | `stdio` (M1) or `http` (Streamable HTTP for the hosted connector; M2 still adds OAuth + hosting). |
 | `OPEN_STATE_ALERT_DB` | `open_state_camping_alerts.db` | SQLite path for alerts (no identity stored). |
+| `OPEN_STATE_ALERT_BACKEND` | `sqlite` | Alert storage backend; managed backends arrive with M2 hosting. |
 | `OPEN_STATE_POLL_INTERVAL_MINUTES` | `10` | Alert poll interval; floored at 5. |
 | `OPEN_STATE_USER_AGENT` | a browser UA | See the note below. |
 | `OPEN_STATE_HTTP_TIMEOUT` | `30` | Upstream request timeout (seconds). |
 | `OPEN_STATE_NTFY_BASE` | `https://ntfy.sh` | Base URL for auto-provisioned notification topics; set to a self-hosted ntfy for privacy. |
+| `OPEN_STATE_HOST` / `OPEN_STATE_PORT` | `127.0.0.1` / `8000` | Bind address for `http` transport. |
+| `OPEN_STATE_MCP_PATH` | `/mcp` | Path the MCP endpoint is served at (`http` transport). |
+| `OPEN_STATE_STATELESS_HTTP` | `true` | Stateless HTTP so multiple replicas don't break sessions. |
 
 ## Tests
 
