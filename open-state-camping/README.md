@@ -85,6 +85,16 @@ Desktop launches the server with a minimal `PATH`), then restart Claude Desktop.
 
 Find your `uv` path with `which uv` (macOS/Linux) or `where uv` (Windows).
 
+## Connect it to Claude Code
+
+The repository root ships a [`.mcp.json`](../.mcp.json) that registers this
+server for [Claude Code](https://claude.com/claude-code). Open the repo in Claude
+Code and approve the `open-state-camping` server when prompted — the eight tools
+load and you can drive them in plain language, the same end-to-end test as Claude
+Desktop, including from the Claude Code web and mobile apps. Unlike the Desktop
+config above, it uses a **relative** `--directory`, so it works for anyone who
+clones the repo with no per-machine paths to edit.
+
 ### Try it
 
 - "Find me a Parks Canada campground in Banff."
@@ -102,10 +112,17 @@ account, choose your exact site, and confirm and pay yourself.
 is retired and — if you gave a `notify_target` — a short message with the booking
 link is sent there.
 
-- `notify_target` is an optional web link **you** control, for example an
-  [ntfy.sh](https://ntfy.sh) topic URL (`https://ntfy.sh/your-private-topic`). No
-  account, password, or personal information is stored — only the search and the
-  link you provide.
+- **Easiest:** ask for the watch and say you'd like to be notified — the
+  assistant calls `create_alert` with `notify_target="auto"`, which provisions a
+  **private, random [ntfy.sh](https://ntfy.sh) topic** for you (no sign-up), sends
+  a **test message** so you can confirm it works, and hands back a subscribe link
+  plus an `ntfy://` deep link that opens the ntfy phone app in one tap.
+- **Bring your own:** pass an `http(s)` link **you** control (such as your own
+  ntfy topic) as `notify_target`.
+- Either way, no account, password, or personal information is stored — only the
+  search and the link. An auto topic's random suffix is its secret: anyone who
+  learns the full topic name can read or post to it, so treat the link as private.
+  Point `OPEN_STATE_NTFY_BASE` at a self-hosted ntfy for stronger guarantees.
 - In M1 the poller runs **while your assistant session is open** (the server is a
   local process). Always-on watching arrives with hosting in M2.
 
@@ -120,6 +137,7 @@ All optional, via environment variables:
 | `OPEN_STATE_POLL_INTERVAL_MINUTES` | `10` | Alert poll interval; floored at 5. |
 | `OPEN_STATE_USER_AGENT` | a browser UA | See the note below. |
 | `OPEN_STATE_HTTP_TIMEOUT` | `30` | Upstream request timeout (seconds). |
+| `OPEN_STATE_NTFY_BASE` | `https://ntfy.sh` | Base URL for auto-provisioned notification topics; set to a self-hosted ntfy for privacy. |
 
 ## Tests
 

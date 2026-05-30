@@ -41,6 +41,9 @@ class Config:
     # HTTP client settings for upstream booking platforms.
     user_agent: str = _DEFAULT_USER_AGENT
     http_timeout_seconds: float = 30.0
+    # Base URL for auto-provisioned notification channels. ntfy.sh needs no
+    # sign-up; an operator can point this at a self-hosted ntfy for privacy.
+    ntfy_base: str = "https://ntfy.sh"
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -55,6 +58,7 @@ class Config:
             poll_interval_minutes=enforce_polling_floor(interval),
             user_agent=os.getenv("OPEN_STATE_USER_AGENT", _DEFAULT_USER_AGENT),
             http_timeout_seconds=float(os.getenv("OPEN_STATE_HTTP_TIMEOUT", "30")),
+            ntfy_base=os.getenv("OPEN_STATE_NTFY_BASE", "https://ntfy.sh"),
         )
 
 

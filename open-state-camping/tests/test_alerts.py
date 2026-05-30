@@ -191,3 +191,64 @@ def test_create_alert_rejects_bad_notify_target(tools):
         notify_target="not-a-url",
     )
     assert "must be a web address" in out
+
+
+# -- notification channels --------------------------------------------------
+
+
+def test_generate_channel_is_random_and_well_formed():
+    from open_state_camping.notify import generate_channel
+
+    a = generate_channel("https://ntfy.sh")
+    b = generate_channel("https://ntfy.sh")
+    assert a.topic != b.topic  # unguessable: each channel is unique
+    assert a.subscribe_url == f"https://ntfy.sh/{a.topic}"
+    assert a.app_url == f"ntfy://ntfy.sh/{a.topic}"
+    assert a.topic.startswith("openstate-")
+
+
+def test_generate_channel_honors_custom_base():
+    from open_state_camping.notify import generate_channel
+
+    ch = generate_channel("https://ntfy.example.org/")  # trailing slash trimmed
+    assert ch.subscribe_url == f"https://ntfy.example.org/{ch.topic}"
+    assert ch.app_url == f"ntfy://ntfy.example.org/{ch.topic}"
+
+
+def test_create_alert_auto_provisions_channel_and_test_pings(tools, monkeypatch):
+    sent: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        server, "send_message", lambda target, message, **kw: sent.append((target, message)) or True
+    )
+
+    out = tools.create_alert.fn(
+        campground_id=CAMPGROUND_ID, start_date=START, end_date=END, party_size=2,
+        notify_target="auto",
+    )
+
+    # A private channel link is offered to the citizen, plus a mobile deep link.
+    assert "ntfy.sh/openstate-" in out
+    assert "ntfy://" in out
+    assert "test message" in out
+
+    # The test ping was sent to the same channel that was stored on the alert.
+    assert len(sent) == 1
+    alert_id = out.split("watch id is")[1].split(".")[0].strip()
+    stored = tools.get_store().get(alert_id)
+    assert stored.notify_target == sent[0][0]
+    assert stored.notify_target.startswith("https://ntfy.sh/openstate-")
+
+
+def test_create_alert_auto_channel_survives_failed_test_ping(tools, monkeypatch):
+    def boom(*args, **kwargs):
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr(server, "send_message", boom)
+
+    out = tools.create_alert.fn(
+        campground_id=CAMPGROUND_ID, start_date=START, end_date=END, party_size=2,
+        notify_target="auto",
+    )
+    # The watch is still created and the channel still saved, ping or no ping.
+    assert "watch id is" in out
+    assert "did not go through" in out

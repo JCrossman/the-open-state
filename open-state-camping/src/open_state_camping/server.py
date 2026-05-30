@@ -32,6 +32,7 @@ from mcp.types import ToolAnnotations
 
 from open_state_camping.alerts import AlertPoller, AlertStore
 from open_state_camping.config import Config
+from open_state_camping.notify import generate_channel, send_message
 from open_state_camping.providers.going_to_camp.client import QueueItError, UpstreamError
 from open_state_camping.providers.parks_canada import (
     PARKS_CANADA_REC_AREA_ID,
@@ -371,17 +372,29 @@ def create_alert(
 
     Use this when a search finds nothing but the citizen wants to be told if a
     cancellation frees a site. It saves the search and checks it on a polite
-    schedule (never faster than every 5 minutes). `notify_target` is an optional
-    web link the citizen controls (for example an ntfy.sh topic link); when a
-    site opens, a short message is sent there. No account, password, or personal
-    information is stored - only the search and the link you provide. This never
-    books; the citizen confirms in their own session.
+    schedule (never faster than every 5 minutes).
+
+    For push notifications, set `notify_target="auto"` and I will create a
+    private notification channel for the citizen - a random, unguessable ntfy.sh
+    topic that needs no sign-up - and send a test message so they can confirm it
+    works. Prefer this for a citizen who just wants to be pinged. Alternatively
+    pass an http(s) link the citizen already controls (such as their own ntfy
+    topic). Leave it empty to set a silent watch they check with list_alerts.
+
+    No account, password, or personal information is stored - only the search and
+    the notification link. This never books; the citizen confirms in their own
+    session.
     """
-    if notify_target and not notify_target.startswith(("http://", "https://")):
+    channel = None
+    if notify_target == "auto":
+        channel = generate_channel(Config.from_env().ntfy_base)
+        notify_target = channel.subscribe_url
+    elif notify_target and not notify_target.startswith(("http://", "https://")):
         return (
             "The notification link must be a web address starting with http:// "
             "or https:// that you control, such as an ntfy.sh topic link. You can "
-            "also set an alert without one and check back with list_alerts."
+            'also say "auto" and I will set up a private channel for you, or set '
+            "an alert without one and check back with list_alerts."
         )
     try:
         alert = get_store().add(
@@ -400,6 +413,20 @@ def create_alert(
     except Exception as exc:  # noqa: BLE001
         return _problem(exc)
 
+    # For an auto channel, send a test ping so the citizen can confirm delivery
+    # before relying on it. Best-effort: a failed ping never fails the watch.
+    test_ok: Optional[bool] = None
+    if channel is not None:
+        try:
+            test_ok = send_message(
+                channel.subscribe_url,
+                "This is a test from The Open State. Your campsite alerts will "
+                "arrive here. You can mute or delete this topic at any time.",
+                title="Open State alert channel ready",
+            )
+        except Exception:  # noqa: BLE001 - the test ping is best-effort
+            test_ok = False
+
     interval = Config.from_env().poll_interval_minutes
     stay = f"{start_date.isoformat()} to {end_date.isoformat()}"
     lines = [
@@ -409,7 +436,30 @@ def create_alert(
         + f". Your watch id is {alert.id}.",
         f"I check about every {interval} minutes, never faster than every 5.",
     ]
-    if notify_target:
+    if channel is not None:
+        lines.append(
+            "I set up a private notification channel for you - no sign-up needed. "
+            "Open this link to subscribe:\n  " + channel.subscribe_url
+        )
+        lines.append(
+            "On a phone with the ntfy app installed, this opens it directly:\n  "
+            + channel.app_url
+        )
+        if test_ok:
+            lines.append(
+                "I just sent a test message to it - check that it arrived so you "
+                "know notifications are working."
+            )
+        elif test_ok is False:
+            lines.append(
+                "Note: my test message did not go through just now, but the "
+                "channel is saved and I will try again when a site opens."
+            )
+        lines.append(
+            "When a site opens, I will send a prepared booking link there that "
+            "you confirm yourself."
+        )
+    elif notify_target:
         lines.append(
             "When a site opens, I will send a message to your notification link "
             "with a prepared booking link you confirm yourself."
