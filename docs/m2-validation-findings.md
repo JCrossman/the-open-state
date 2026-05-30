@@ -150,7 +150,8 @@ authenticated build later.
 ### Outcome (option A shipped)
 
 Option A is deployed to Azure Container Apps (Canada Central, scale-to-zero, rate
-limited at 3 req/s burst 10). All five read-only tools verified live over public
+limited at 3 req/s burst 10). All read-only tools (six, after the post-M1
+`search_park_availability` and viewable-photo additions) verified live over public
 HTTPS; `infra/` holds the IaC.
 
 **Observed:** when adding the connector, Claude (web/desktop) shows a cosmetic

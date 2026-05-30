@@ -22,14 +22,15 @@ The verified Parks Canada API contract is in
 
 ## What it does
 
-Eight plain-language tools, all read-only:
+Nine plain-language tools, all read-only:
 
 | Tool | Purpose |
 |---|---|
 | `search_parks` | Turn a place name ("Banff") into campgrounds and their ids. |
+| `search_park_availability` | Check **every** campground in a park at once for a stay and return one consolidated list of which have openings. Use this when the citizen names a place rather than one campground. |
 | `list_equipment_types` | List equipment types (tent, RV, …) you can filter by. |
-| `search_sites` | Find open sites for a stay; **accessibility is first-class** and filterable; supports `nights` and `weekends_only`. |
-| `get_site_details` | One site's accessibility, capacity, service type, amenities, photos. |
+| `search_sites` | Find open sites in one campground for a stay; **accessibility is first-class** and filterable; supports `nights` and `weekends_only`. |
+| `get_site_details` | One site's accessibility, capacity, service type, amenities, and photos. Set `include_photos` to return the photos as viewable images the assistant can actually show. |
 | `prepare_booking_url` | A booking deep link the citizen opens and confirms themselves. |
 | `create_alert` | Watch a campground and get notified when a cancellation opens a site. |
 | `list_alerts` / `delete_alert` | Manage your watches. |
@@ -81,11 +82,12 @@ sessions.
 ### Hosted read-only preview (live)
 
 A read-only, unauthenticated preview is deployed to Azure Container Apps. It
-exposes the five public-data, prepare-only tools (`search_parks`,
-`list_equipment_types`, `search_sites`, `get_site_details`,
-`prepare_booking_url`); the alert tools and the poller are turned off
-(`OPEN_STATE_ENABLE_ALERTS=false`), so it scales to zero when idle and stores
-nothing about anyone. Add it to Claude as a custom connector (no auth needed):
+exposes the six public-data, prepare-only tools (`search_parks`,
+`search_park_availability`, `list_equipment_types`, `search_sites`,
+`get_site_details`, `prepare_booking_url`); the alert tools and the poller are
+turned off (`OPEN_STATE_ENABLE_ALERTS=false`), so it scales to zero when idle and
+stores nothing about anyone. Add it to Claude as a custom connector (no auth
+needed):
 
 ```
 https://openstate-camping.thankfulsmoke-6af0ea17.canadacentral.azurecontainerapps.io/mcp
@@ -147,7 +149,7 @@ Find your `uv` path with `which uv` (macOS/Linux) or `where uv` (Windows).
 
 The repository root ships a [`.mcp.json`](../.mcp.json) that registers this
 server for [Claude Code](https://claude.com/claude-code). Open the repo in Claude
-Code and approve the `open-state-camping` server when prompted — the eight tools
+Code and approve the `open-state-camping` server when prompted — the nine tools
 load and you can drive them in plain language, the same end-to-end test as Claude
 Desktop, including from the Claude Code web and mobile apps. Unlike the Desktop
 config above, it uses a **relative** `--directory`, so it works for anyone who

@@ -49,7 +49,7 @@ image. It prints the public URL, `/health`, and the `/mcp` endpoint.
 ## After deploy
 
 1. Hit `https://<fqdn>/health` — expect `{"status":"ok",...}`.
-2. Confirm the MCP endpoint lists the **five** read-only tools (no alert tools).
+2. Confirm the MCP endpoint lists the **six** read-only tools (no alert tools).
 3. Add `https://<fqdn>/mcp` as a custom connector in Claude (no auth).
 4. Anthropic connects from `160.79.104.0/21`; the ingress is public, so no
    allowlist is needed unless you add a firewall.
