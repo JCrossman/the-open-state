@@ -21,12 +21,16 @@ milestone step alongside the alert store and poller.
 
 from __future__ import annotations
 
+import asyncio
 import datetime as _dt
+import logging
+from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
+from open_state_camping.alerts import AlertPoller, AlertStore
 from open_state_camping.config import Config
 from open_state_camping.providers.going_to_camp.client import QueueItError, UpstreamError
 from open_state_camping.providers.parks_canada import (
@@ -34,7 +38,30 @@ from open_state_camping.providers.parks_canada import (
     ParksCanadaProvider,
 )
 
-mcp = FastMCP("Open State: Camping")
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastMCP):
+    """Run the alert poller in the background for the life of the server.
+
+    M2 moves this into the ASGI lifespan of the hosted app; for M1 (stdio) the
+    poller runs while the citizen's assistant session is open.
+    """
+    poller = AlertPoller(get_store(), _resolve_provider, Config.from_env())
+    task = asyncio.create_task(poller.run())
+    try:
+        yield
+    finally:
+        poller.stop()
+        task.cancel()
+        try:
+            await task
+        except (asyncio.CancelledError, Exception):  # noqa: BLE001
+            pass
+
+
+mcp = FastMCP("Open State: Camping", lifespan=_lifespan)
 
 _INDEPENDENCE_NOTE = (
     "The Open State is an independent public-interest tool. It is not operated by "
@@ -42,6 +69,7 @@ _INDEPENDENCE_NOTE = (
 )
 
 _provider: Optional[ParksCanadaProvider] = None
+_store: Optional[AlertStore] = None
 
 
 def get_provider() -> ParksCanadaProvider:
@@ -50,6 +78,21 @@ def get_provider() -> ParksCanadaProvider:
     if _provider is None:
         _provider = ParksCanadaProvider(config=Config.from_env())
     return _provider
+
+
+def get_store() -> AlertStore:
+    """Build the alert store on first use."""
+    global _store
+    if _store is None:
+        _store = AlertStore(Config.from_env().alert_db_path)
+    return _store
+
+
+def _resolve_provider(provider_name: str) -> ParksCanadaProvider:
+    """Map a stored alert's provider name to a provider (M1: Parks Canada only)."""
+    if provider_name == ParksCanadaProvider.name:
+        return get_provider()
+    raise UpstreamError(f"No provider is available for '{provider_name}'.")
 
 
 def _readonly(title: str) -> ToolAnnotations:
@@ -302,6 +345,130 @@ def prepare_booking_url(
         "confirm and pay yourself. This tool never books or pays on your "
         "behalf.\n\n" + url
     )
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="Set a cancellation alert",
+        readOnlyHint=False,
+        destructiveHint=False,
+        openWorldHint=True,
+    ),
+)
+def create_alert(
+    campground_id: str,
+    start_date: _dt.date,
+    end_date: _dt.date,
+    party_size: int,
+    recreation_area_id: str = PARKS_CANADA_REC_AREA_ID,
+    equipment_type: Optional[str] = None,
+    accessible_only: bool = False,
+    nights: Optional[int] = None,
+    weekends_only: bool = False,
+    notify_target: Optional[str] = None,
+) -> str:
+    """Watch a campground for openings and tell the citizen when one appears.
+
+    Use this when a search finds nothing but the citizen wants to be told if a
+    cancellation frees a site. It saves the search and checks it on a polite
+    schedule (never faster than every 5 minutes). `notify_target` is an optional
+    web link the citizen controls (for example an ntfy.sh topic link); when a
+    site opens, a short message is sent there. No account, password, or personal
+    information is stored - only the search and the link you provide. This never
+    books; the citizen confirms in their own session.
+    """
+    if notify_target and not notify_target.startswith(("http://", "https://")):
+        return (
+            "The notification link must be a web address starting with http:// "
+            "or https:// that you control, such as an ntfy.sh topic link. You can "
+            "also set an alert without one and check back with list_alerts."
+        )
+    try:
+        alert = get_store().add(
+            provider=ParksCanadaProvider.name,
+            recreation_area_id=recreation_area_id,
+            campground_id=campground_id,
+            start_date=start_date,
+            end_date=end_date,
+            party_size=party_size,
+            equipment_type=equipment_type,
+            accessible_only=accessible_only,
+            nights=nights,
+            weekends_only=weekends_only,
+            notify_target=notify_target,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return _problem(exc)
+
+    interval = Config.from_env().poll_interval_minutes
+    stay = f"{start_date.isoformat()} to {end_date.isoformat()}"
+    lines = [
+        f"Done. I am now watching that campground for {stay}, party of "
+        f"{party_size}"
+        + (" (accessible sites only)" if accessible_only else "")
+        + f". Your watch id is {alert.id}.",
+        f"I check about every {interval} minutes, never faster than every 5.",
+    ]
+    if notify_target:
+        lines.append(
+            "When a site opens, I will send a message to your notification link "
+            "with a prepared booking link you confirm yourself."
+        )
+    else:
+        lines.append(
+            "Ask me to list your alerts to see whether anything has opened up."
+        )
+    return "\n".join(lines)
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(title="List your cancellation alerts", readOnlyHint=True),
+)
+def list_alerts() -> str:
+    """List the cancellation watches that are currently saved and their status."""
+    try:
+        alerts = get_store().list_all()
+    except Exception as exc:  # noqa: BLE001
+        return _problem(exc)
+
+    if not alerts:
+        return "You have no saved alerts."
+    lines = [f"You have {len(alerts)} saved alert(s):", ""]
+    for alert in alerts:
+        stay = f"{alert.start_date.isoformat()} to {alert.end_date.isoformat()}"
+        status = (
+            "a site has opened - check your booking link"
+            if alert.status == "fired"
+            else "watching"
+        )
+        detail = f"- {alert.id}: campground {alert.campground_id}, {stay}, party of "
+        detail += f"{alert.party_size}"
+        if alert.accessible_only:
+            detail += ", accessible only"
+        detail += f" - {status}."
+        if alert.last_result:
+            detail += f" Last check: {alert.last_result}."
+        lines.append(detail)
+    return "\n".join(lines)
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="Delete a cancellation alert",
+        readOnlyHint=False,
+        destructiveHint=True,
+        idempotentHint=True,
+    ),
+)
+def delete_alert(alert_id: str) -> str:
+    """Delete a saved cancellation watch by its id."""
+    try:
+        deleted = get_store().delete(alert_id)
+    except Exception as exc:  # noqa: BLE001
+        return _problem(exc)
+    if deleted:
+        return f"Deleted alert {alert_id}."
+    return f"I could not find an alert with id {alert_id}."
 
 
 def main() -> None:

@@ -14,6 +14,7 @@ import datetime as dt
 import pytest
 
 from open_state_camping import server
+from open_state_camping.alerts import AlertStore
 
 CAMPGROUND_ID = "-2147483644"
 SITE_104 = "-2147475789"
@@ -22,9 +23,10 @@ END = dt.date(2026, 7, 19)
 
 
 @pytest.fixture
-def tools(provider, monkeypatch):
-    """Point the server's tools at the mock-backed provider."""
+def tools(provider, tmp_path, monkeypatch):
+    """Point the server's tools at the mock-backed provider and a temp store."""
     monkeypatch.setattr(server, "_provider", provider)
+    monkeypatch.setattr(server, "_store", AlertStore(str(tmp_path / "alerts.db")))
     return server
 
 
