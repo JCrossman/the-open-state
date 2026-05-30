@@ -147,6 +147,21 @@ disable/expose the alert tools per deployment; lock `notify_target` down to the
 ntfy base host + block private IPs; add rate limiting. These also harden the
 authenticated build later.
 
+### Outcome (option A shipped)
+
+Option A is deployed to Azure Container Apps (Canada Central, scale-to-zero, rate
+limited at 3 req/s burst 10). All five read-only tools verified live over public
+HTTPS; `infra/` holds the IaC.
+
+**Observed:** when adding the connector, Claude (web/desktop) shows a cosmetic
+*"Couldn't register with … sign-in service / add an OAuth Client ID"* warning
+(with an `ofid_…` support reference). It is harmless — Claude's onboarding
+attempts OAuth Dynamic Client Registration, which fails because the preview is
+intentionally unauthenticated (no `/.well-known/oauth-protected-resource`, never a
+`401`), so Claude falls back to a no-auth connection and the tools work. This
+resolves itself once the server publishes Protected Resource Metadata under the
+WorkOS AuthKit build (G1) — which is also when the alert tools return behind login.
+
 ---
 
 ## Sources

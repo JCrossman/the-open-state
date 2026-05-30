@@ -97,6 +97,17 @@ why a full open deployment would be unsafe without auth — is in
 [`../docs/m2-validation-findings.md`](../docs/m2-validation-findings.md). The
 infrastructure-as-code and deploy steps live in [`infra/`](infra/).
 
+> **Known cosmetic warning when adding the connector.** Claude (web/desktop) may
+> show *"Couldn't register with CampMCP's sign-in service… add an OAuth Client
+> ID"* with an `ofid_…` reference. This is harmless: Claude's onboarding
+> optimistically attempts OAuth Dynamic Client Registration, which fails because
+> this preview is intentionally **unauthenticated** (it publishes no
+> `/.well-known/oauth-protected-resource` and never returns a `401`), so Claude
+> falls back to connecting with no auth — and the tools work. Leave the OAuth
+> Client ID blank. The warning disappears once the server gains real OAuth
+> (the WorkOS AuthKit build), which is also when the alert tools return behind
+> login.
+
 #### Rate limiting
 
 Because the preview is an unauthenticated public proxy to the Parks Canada
