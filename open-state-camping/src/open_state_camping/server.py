@@ -486,11 +486,27 @@ def prepare_booking_url(
 ) -> str:
     """Prepare a Parks Canada booking link the citizen opens and confirms.
 
-    Use this when a citizen has chosen where and when they want to camp. It
-    returns a link that opens the Parks Canada site with the campground, dates,
-    party size, and equipment filled in. The citizen signs in, picks their exact
-    site, and confirms and pays themselves. This tool never books or pays.
+    Use this when a citizen has chosen where and when they want to camp.
+    `equipment_type` is **required** because Parks Canada's booking page will not
+    proceed without it: ask the citizen what they are camping with (tent, RV,
+    etc.) and pass the matching equipment id from `list_equipment_types`. The link
+    opens the Parks Canada site with the campground, dates, party size, and
+    equipment filled in; the citizen signs in, picks their exact site, and
+    confirms and pays themselves. This tool never books or pays.
     """
+    # Equipment is mandatory on the Parks Canada booking form, so a link without
+    # it strands the citizen on a page they cannot submit. Guide them to pick one
+    # rather than hand back a link that will not work.
+    if equipment_type is None:
+        return _equipment_prompt(recreation_area_id, reason="missing")
+    try:
+        valid = {e.equipment_id: e.name for e in
+                 get_provider().list_equipment_types(recreation_area_id)}
+    except Exception as exc:  # noqa: BLE001
+        return _problem(exc)
+    if str(equipment_type) not in valid:
+        return _equipment_prompt(recreation_area_id, reason="invalid")
+
     try:
         url = get_provider().booking_url(
             recreation_area_id=recreation_area_id,
@@ -505,11 +521,39 @@ def prepare_booking_url(
         return _problem(exc)
 
     return (
-        "Here is your prepared Parks Canada booking link. Open it in your "
-        "browser, sign in to your own account, choose your exact site, and "
-        "confirm and pay yourself. This tool never books or pays on your "
-        "behalf.\n\n" + url
+        f"Here is your prepared Parks Canada booking link for a {valid[str(equipment_type)]}. "
+        "Open it in your browser, sign in to your own account, choose your exact "
+        "site, and confirm and pay yourself. This tool never books or pays on "
+        "your behalf.\n\n" + url
     )
+
+
+def _equipment_prompt(recreation_area_id: str, *, reason: str) -> str:
+    """Ask the citizen to choose equipment, listing the valid options.
+
+    Parks Canada requires equipment to book, so prepare_booking_url cannot make a
+    working link without it. This returns a plain-language prompt plus the real
+    options for the area, rather than a link that would fail on the page.
+    """
+    lead = (
+        "Before I can prepare a booking link, I need to know what you are camping "
+        "with - Parks Canada's booking page requires it."
+        if reason == "missing"
+        else "That equipment type is not one Parks Canada offers for this area. "
+        "Please choose one of these:"
+    )
+    try:
+        types = get_provider().list_equipment_types(recreation_area_id)
+    except Exception as exc:  # noqa: BLE001
+        return _problem(exc)
+    lines = [lead, ""]
+    for t in types:
+        lines.append(f"- {t.name} (equipment id: {t.equipment_id})")
+    lines += [
+        "",
+        "Tell me which one fits, and I will prepare your booking link.",
+    ]
+    return "\n".join(lines)
 
 
 @mcp.tool(

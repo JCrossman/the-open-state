@@ -139,6 +139,9 @@ def test_get_site_details_photo_load_failure_is_graceful(tools, monkeypatch):
     assert "reservation.pc.gc.ca/images/" in out
 
 
+SMALL_TENT = "-32768"  # valid equipment id in the fixture
+
+
 def test_prepare_booking_url_never_books(tools):
     out = tools.prepare_booking_url.fn(
         campground_id=CAMPGROUND_ID,
@@ -146,9 +149,42 @@ def test_prepare_booking_url_never_books(tools):
         start_date=START,
         end_date=END,
         party_size=2,
+        equipment_type=SMALL_TENT,
     )
     assert "create-booking/results" in out
     assert "never books" in out.lower()
+    # The chosen equipment is named back and threaded into the link.
+    assert "Small Tent" in out
+    assert "subEquipmentId=-32768" in out
+
+
+def test_prepare_booking_url_requires_equipment(tools):
+    out = tools.prepare_booking_url.fn(
+        campground_id=CAMPGROUND_ID,
+        campsite_id=SITE_104,
+        start_date=START,
+        end_date=END,
+        party_size=2,
+    )
+    # No link; instead a prompt to choose equipment, with real options listed.
+    assert "create-booking/results" not in out
+    assert "requires it" in out.lower()
+    assert "equipment id:" in out
+    assert "Small Tent" in out
+
+
+def test_prepare_booking_url_rejects_invalid_equipment(tools):
+    out = tools.prepare_booking_url.fn(
+        campground_id=CAMPGROUND_ID,
+        campsite_id=SITE_104,
+        start_date=START,
+        end_date=END,
+        party_size=2,
+        equipment_type="999999",
+    )
+    assert "create-booking/results" not in out
+    assert "not one Parks Canada offers" in out
+    assert "equipment id:" in out
 
 
 def test_end_to_end_via_mcp_client_coerces_iso_dates(tools):
