@@ -366,8 +366,14 @@ def get_site_details(
     text = "\n".join(lines)
     if images:
         # Return text plus viewable image content blocks so the assistant can
-        # actually look at the site, not just receive URLs.
-        return [text, *images]
+        # actually look at the site, not just receive URLs. Convert each Image to
+        # an MCP ImageContent block; a bare Image is not serializable in a list.
+        from mcp.types import TextContent
+
+        return [
+            TextContent(type="text", text=text),
+            *(img.to_image_content() for img in images),
+        ]
     return text
 
 

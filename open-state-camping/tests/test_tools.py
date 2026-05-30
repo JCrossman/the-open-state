@@ -93,18 +93,19 @@ def test_get_site_details(tools):
 
 
 def test_get_site_details_returns_viewable_images(tools):
-    from fastmcp.utilities.types import Image
+    from mcp.types import ImageContent, TextContent
 
     out = tools.get_site_details.fn(
         campground_id=CAMPGROUND_ID, campsite_id=SITE_104, include_photos=True
     )
     # Returns text plus viewable image content blocks the assistant can see.
     assert isinstance(out, list)
-    text = out[0]
-    images = [p for p in out[1:] if isinstance(p, Image)]
+    text = next(b.text for b in out if isinstance(b, TextContent))
+    images = [b for b in out if isinstance(b, ImageContent)]
     assert "Showing" in text and "photo" in text.lower()
     assert images, "expected at least one viewable image"
     assert len(images) <= 3  # capped
+    assert all(b.mimeType.startswith("image/") for b in images)
 
 
 def test_get_site_details_photo_load_failure_is_graceful(tools, monkeypatch):
