@@ -44,6 +44,12 @@ class Config:
     # Base URL for auto-provisioned notification channels. ntfy.sh needs no
     # sign-up; an operator can point this at a self-hosted ntfy for privacy.
     ntfy_base: str = "https://ntfy.sh"
+    # Hosts a citizen-supplied notify_target may point at, beyond the ntfy_base
+    # host (which is always allowed). Restricting targets to known notification
+    # hosts stops the server being used as an open POST relay; private/internal
+    # IP targets are always refused regardless (SSRF, docs/m2-validation-
+    # findings.md decision 2). Empty = only the ntfy_base host is allowed.
+    notify_allowed_hosts: tuple[str, ...] = ()
     # Remote serving (M2). Ignored under stdio. The poller runs in the ASGI
     # lifespan, so a hosted instance must stay always-on (min replicas >= 1).
     host: str = "127.0.0.1"
@@ -59,6 +65,10 @@ class Config:
     # public preview of the public-data, prepare-only tools (docs/m2-validation-
     # findings.md, decision 2). Alerts return when they are scoped behind auth.
     enable_alerts: bool = True
+    # Cap on simultaneously active watches per instance. Each active alert is
+    # background-polled, so an unbounded count means unbounded upstream polling
+    # (Constitution Art. 7.3). Bounds abuse on an unauthenticated host.
+    max_active_alerts: int = 50
     # Global request rate limit for HTTP serving (upstream politeness, Art. 7.3).
     # All Claude traffic shares Anthropic's IP range, so the limit is global, not
     # per-client. <= 0 disables. Applied only under the http transport.
@@ -79,12 +89,18 @@ class Config:
             user_agent=os.getenv("OPEN_STATE_USER_AGENT", _DEFAULT_USER_AGENT),
             http_timeout_seconds=float(os.getenv("OPEN_STATE_HTTP_TIMEOUT", "30")),
             ntfy_base=os.getenv("OPEN_STATE_NTFY_BASE", "https://ntfy.sh"),
+            notify_allowed_hosts=tuple(
+                h.strip().lower()
+                for h in os.getenv("OPEN_STATE_NOTIFY_ALLOWED_HOSTS", "").split(",")
+                if h.strip()
+            ),
             host=os.getenv("OPEN_STATE_HOST", "127.0.0.1"),
             port=int(os.getenv("OPEN_STATE_PORT", "8000")),
             mcp_path=os.getenv("OPEN_STATE_MCP_PATH", "/mcp"),
             stateless_http=_env_bool("OPEN_STATE_STATELESS_HTTP", True),
             alert_backend=os.getenv("OPEN_STATE_ALERT_BACKEND", "sqlite"),
             enable_alerts=_env_bool("OPEN_STATE_ENABLE_ALERTS", True),
+            max_active_alerts=int(os.getenv("OPEN_STATE_MAX_ACTIVE_ALERTS", "50")),
             rate_limit_rps=float(os.getenv("OPEN_STATE_RATE_LIMIT_RPS", "5")),
             rate_limit_burst=int(os.getenv("OPEN_STATE_RATE_LIMIT_BURST", "20")),
         )

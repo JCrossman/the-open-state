@@ -161,6 +161,14 @@ class AlertStore:
             ).fetchall()
         return [_row_to_alert(r) for r in rows]
 
+    def count_active(self) -> int:
+        """How many watches are currently active (for the per-instance cap)."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) AS n FROM alerts WHERE status = 'active'"
+            ).fetchone()
+        return int(row["n"])
+
     def delete(self, alert_id: str) -> bool:
         with self._connect() as conn:
             cur = conn.execute("DELETE FROM alerts WHERE id = ?", (alert_id,))
@@ -188,7 +196,8 @@ def build_store(backend: str, db_path: str) -> AlertStore:
 
     This is the seam M2 hosting plugs a managed, encrypted-at-rest store into;
     any backend must implement the AlertStore method surface (add, get, list_all,
-    list_active, delete, mark_checked, mark_fired). M1 ships only local SQLite.
+    list_active, count_active, delete, mark_checked, mark_fired). M1 ships only
+    local SQLite.
     """
     if backend == "sqlite":
         return AlertStore(db_path)

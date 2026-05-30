@@ -15,7 +15,8 @@ from open_state_camping import server
 from open_state_camping.alerts import AlertStore
 from open_state_camping.alerts.poller import AlertPoller
 from open_state_camping.config import Config, enforce_polling_floor
-from open_state_camping.providers.base import AvailableSite
+from open_state_camping.notify import allowed_notify_hosts, validate_notify_target
+from open_state_camping.providers.base import AvailableSite, InvalidInputError
 
 CAMPGROUND_ID = "-2147483644"
 START = dt.date(2026, 7, 17)
@@ -191,6 +192,88 @@ def test_create_alert_rejects_bad_notify_target(tools):
         notify_target="not-a-url",
     )
     assert "must be a web address" in out
+
+
+# -- notify_target hardening (SSRF / open-relay, docs/m2-validation-findings) --
+
+_NTFY_ONLY = frozenset({"ntfy.sh"})
+
+
+def test_validate_notify_target_allows_configured_ntfy_host():
+    # The configured notification host (and a citizen's own topic on it) is fine.
+    validate_notify_target("https://ntfy.sh/openstate-abc123", _NTFY_ONLY)
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "not-a-url",  # no scheme/host
+        "ftp://ntfy.sh/x",  # wrong scheme
+        "http://169.254.169.254/latest/meta-data/",  # cloud metadata (SSRF)
+        "http://127.0.0.1/x",  # loopback
+        "http://[::1]/x",  # IPv6 loopback
+        "http://10.1.2.3/notify",  # private range
+        "https://evil.example.com/relay",  # public, but not an allowed host
+    ],
+)
+def test_validate_notify_target_rejects_unsafe(bad):
+    with pytest.raises(InvalidInputError):
+        validate_notify_target(bad, _NTFY_ONLY)
+
+
+def test_allowed_notify_hosts_includes_base_and_operator_extras():
+    cfg = Config(
+        ntfy_base="https://ntfy.sh",
+        notify_allowed_hosts=("alerts.example.org",),
+    )
+    hosts = allowed_notify_hosts(cfg)
+    assert "ntfy.sh" in hosts and "alerts.example.org" in hosts
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "http://169.254.169.254/latest/meta-data/",  # SSRF to metadata endpoint
+        "http://127.0.0.1:8000/x",  # SSRF to localhost
+        "https://evil.example.com/relay",  # open POST relay
+    ],
+)
+def test_create_alert_rejects_unsafe_notify_target(tools, bad):
+    out = tools.create_alert.fn(
+        campground_id=CAMPGROUND_ID, start_date=START, end_date=END, party_size=2,
+        notify_target=bad,
+    )
+    assert "watch id is" not in out  # no watch created
+    assert "no saved alerts" in tools.list_alerts.fn().lower()  # nothing stored
+
+
+def test_create_alert_enforces_active_cap(tools, monkeypatch):
+    monkeypatch.setenv("OPEN_STATE_MAX_ACTIVE_ALERTS", "1")
+    first = tools.create_alert.fn(
+        campground_id=CAMPGROUND_ID, start_date=START, end_date=END, party_size=2
+    )
+    assert "watch id is" in first
+    second = tools.create_alert.fn(
+        campground_id=CAMPGROUND_ID, start_date=START, end_date=END, party_size=3
+    )
+    assert "watch id is" not in second
+    assert "delete a watch" in second.lower()
+
+
+def test_poller_refuses_to_notify_unsafe_stored_target(store: AlertStore):
+    # Defense in depth: even if an unsafe target is already stored, the poller
+    # must not POST to it when the watch fires.
+    store.add(
+        provider="parks_canada", recreation_area_id="14", campground_id=CAMPGROUND_ID,
+        start_date=START, end_date=END, party_size=2,
+        notify_target="http://169.254.169.254/latest/meta-data/",
+    )
+    notifier = _FakeNotifier()
+    poller = AlertPoller(
+        store, lambda name: _StubProvider([_make_site(True)]), Config(), notifier=notifier
+    )
+    asyncio.run(poller.check_once())
+    assert notifier.calls == []  # refused, never POSTed
 
 
 # -- notification channels --------------------------------------------------
