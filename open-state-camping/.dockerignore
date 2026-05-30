@@ -6,4 +6,5 @@
 *.db
 tests
 docs
+infra
 .mcp.json
