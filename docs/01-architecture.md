@@ -76,6 +76,7 @@ Security rules (binding):
 
 - Respect camply’s polling floor: minimum 5 minutes, default 10. Enforce in code; reject shorter intervals.
 - Jitter polls. Set a realistic, honest User-Agent. Never hammer reservation.pc.gc.ca or shop.albertaparks.ca.
+- Outbound HTTPS verifies certificates against the system/operator CA bundle (`REQUESTS_CA_BUNDLE` / `SSL_CERT_FILE`), falling back to certifi, so the tool works behind a TLS-intercepting corporate or proxy egress. Verification is never disabled - we only broaden the trusted CA set.
 - On launch days both platforms use Queue-it virtual waiting rooms. Do not try to defeat them. Detect a queue response and surface it to the citizen as a clear, typed status.
 
 ## Testing
