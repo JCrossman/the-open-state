@@ -241,6 +241,10 @@ class ParksCanadaProvider(CampingProvider):
             site_type=service_label,
         )
 
+    def fetch_photo(self, url: str) -> Optional[tuple[bytes, str]]:
+        """Fetch one site photo as (bytes, format), or None if it cannot load."""
+        return self._client.fetch_image(url)
+
     def booking_url(
         self,
         *,

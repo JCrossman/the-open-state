@@ -156,6 +156,24 @@ def test_site_details_includes_accessibility_amenities_and_photos(
     assert details.photos and all(u.startswith("http") for u in details.photos)
 
 
+def test_fetch_photo_returns_image_bytes(provider: ParksCanadaProvider):
+    details = provider.site_details(
+        recreation_area_id="14", campground_id=CAMPGROUND_ID, campsite_id=SITE_104
+    )
+    fetched = provider.fetch_photo(details.photos[0])
+    assert fetched is not None
+    data, fmt = fetched
+    assert data.startswith(b"\xff\xd8")  # JPEG magic
+    assert fmt == "jpeg"
+
+
+def test_fetch_photo_rejects_offsite_urls(provider: ParksCanadaProvider):
+    # SSRF guard: only this platform's own https image host is fetched.
+    assert provider.fetch_photo("http://reservation.pc.gc.ca/images/x.jpg") is None
+    assert provider.fetch_photo("https://evil.example.com/x.jpg") is None
+    assert provider.fetch_photo("https://169.254.169.254/latest/meta-data") is None
+
+
 def test_resource_is_accessible_reads_attribute_minus_32756():
     assert resource_is_accessible(
         {"definedAttributes": [{"attributeDefinitionId": -32756, "values": [0]}]}

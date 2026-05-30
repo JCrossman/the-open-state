@@ -25,9 +25,10 @@ import asyncio
 import datetime as _dt
 import logging
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Optional, Union
 
 from fastmcp import FastMCP
+from fastmcp.utilities.types import Image
 from mcp.types import ToolAnnotations
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse
@@ -296,6 +297,10 @@ def search_sites(
     return "\n".join(lines)
 
 
+# A photo is ~90 KB; cap how many we ever fetch so a tool call stays light.
+_MAX_VIEWABLE_PHOTOS = 3
+
+
 @mcp.tool(
     annotations=_readonly("Get campsite details"),
 )
@@ -303,11 +308,17 @@ def get_site_details(
     campground_id: str,
     campsite_id: str,
     recreation_area_id: str = PARKS_CANADA_REC_AREA_ID,
-) -> str:
+    include_photos: bool = False,
+) -> Union[str, list]:
     """Get plain-language detail about one campsite, including accessibility.
 
     Use this when a citizen wants more about a specific site from a search
     result. Pass the campground id and the campsite id from `search_sites`.
+
+    Set `include_photos=True` when the citizen wants to *see* the site: the tool
+    then returns the actual photos as viewable images (up to three) alongside the
+    text, so they can be shown directly. Left off by default, the text still
+    lists the photo links a person can open in a browser.
     """
     try:
         details = get_provider().site_details(
@@ -331,12 +342,33 @@ def get_site_details(
     if details.amenities:
         lines.append("Site details:")
         lines.extend(f"- {amenity}" for amenity in details.amenities)
-    if details.photos:
+
+    images: list[Image] = []
+    if details.photos and include_photos:
+        provider = get_provider()
+        for url in details.photos[:_MAX_VIEWABLE_PHOTOS]:
+            fetched = provider.fetch_photo(url)
+            if fetched is not None:
+                data, fmt = fetched
+                images.append(Image(data=data, format=fmt))
+        shown = f"Showing {len(images)} photo(s) of this site." if images else (
+            "I could not load the photos right now; you can open them in a browser:"
+        )
+        lines.append(shown)
+        lines.append("Photo links: " + ", ".join(details.photos[:5]))
+    elif details.photos:
         lines.append(
-            f"There are {len(details.photos)} photo(s) of this site: "
+            f"There are {len(details.photos)} photo(s) of this site. Ask to see "
+            "them, or open these links in a browser: "
             + ", ".join(details.photos[:5])
         )
-    return "\n".join(lines)
+
+    text = "\n".join(lines)
+    if images:
+        # Return text plus viewable image content blocks so the assistant can
+        # actually look at the site, not just receive URLs.
+        return [text, *images]
+    return text
 
 
 @mcp.tool(

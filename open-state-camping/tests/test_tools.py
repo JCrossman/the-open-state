@@ -88,6 +88,34 @@ def test_get_site_details(tools):
     out = tools.get_site_details.fn(campground_id=CAMPGROUND_ID, campsite_id=SITE_104)
     assert "accessible" in out.lower()
     assert "Service type:" in out
+    # Without include_photos, photos are offered as links, not fetched.
+    assert "browser" in out.lower()
+
+
+def test_get_site_details_returns_viewable_images(tools):
+    from fastmcp.utilities.types import Image
+
+    out = tools.get_site_details.fn(
+        campground_id=CAMPGROUND_ID, campsite_id=SITE_104, include_photos=True
+    )
+    # Returns text plus viewable image content blocks the assistant can see.
+    assert isinstance(out, list)
+    text = out[0]
+    images = [p for p in out[1:] if isinstance(p, Image)]
+    assert "Showing" in text and "photo" in text.lower()
+    assert images, "expected at least one viewable image"
+    assert len(images) <= 3  # capped
+
+
+def test_get_site_details_photo_load_failure_is_graceful(tools, monkeypatch):
+    # If photos cannot be fetched, fall back to text + links, never error.
+    monkeypatch.setattr(tools.get_provider(), "fetch_photo", lambda url: None)
+    out = tools.get_site_details.fn(
+        campground_id=CAMPGROUND_ID, campsite_id=SITE_104, include_photos=True
+    )
+    assert isinstance(out, str)
+    assert "could not load" in out.lower()
+    assert "reservation.pc.gc.ca/images/" in out
 
 
 def test_prepare_booking_url_never_books(tools):
