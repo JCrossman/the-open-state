@@ -35,7 +35,12 @@ from starlette.responses import JSONResponse, PlainTextResponse
 
 from open_state_camping.alerts import AlertPoller, AlertStore, build_store
 from open_state_camping.config import Config
-from open_state_camping.notify import generate_channel, send_message
+from open_state_camping.notify import (
+    allowed_notify_hosts,
+    generate_channel,
+    send_message,
+    validate_notify_target,
+)
 from open_state_camping.providers.base import InvalidInputError
 from open_state_camping.providers.going_to_camp.client import QueueItError, UpstreamError
 from open_state_camping.providers.parks_canada import (
@@ -614,24 +619,38 @@ def create_alert(
     private notification channel for the citizen - a random, unguessable ntfy.sh
     topic that needs no sign-up - and send a test message so they can confirm it
     works. Prefer this for a citizen who just wants to be pinged. Alternatively
-    pass an http(s) link the citizen already controls (such as their own ntfy
-    topic). Leave it empty to set a silent watch they check with list_alerts.
+    pass an ntfy topic link the citizen already controls (for safety, links must
+    be on the notification service the server is configured for, not an arbitrary
+    site). Leave it empty to set a silent watch they check with list_alerts.
 
     No account, password, or personal information is stored - only the search and
     the notification link. This never books; the citizen confirms in their own
     session.
     """
+    config = Config.from_env()
+
+    # Bound the number of concurrent watches per instance: each one is polled in
+    # the background, so an unbounded count is unbounded upstream load and an
+    # abuse vector on an open host (Constitution Art. 7.3).
+    if get_store().count_active() >= config.max_active_alerts:
+        return (
+            "I'm already watching the most campgrounds I can keep track of right "
+            "now. Please delete a watch you no longer need (ask me to list your "
+            "alerts) and try again."
+        )
+
     channel = None
     if notify_target == "auto":
-        channel = generate_channel(Config.from_env().ntfy_base)
+        channel = generate_channel(config.ntfy_base)
         notify_target = channel.subscribe_url
-    elif notify_target and not notify_target.startswith(("http://", "https://")):
-        return (
-            "The notification link must be a web address starting with http:// "
-            "or https:// that you control, such as an ntfy.sh topic link. You can "
-            'also say "auto" and I will set up a private channel for you, or set '
-            "an alert without one and check back with list_alerts."
-        )
+    elif notify_target:
+        # A citizen-supplied link is an HTTP POST target the server will hit, so
+        # it must be a known notification host and never a private/internal
+        # address (open-relay + SSRF defense, docs/m2-validation-findings.md).
+        try:
+            validate_notify_target(notify_target, allowed_notify_hosts(config))
+        except InvalidInputError as exc:
+            return str(exc)
     try:
         alert = get_store().add(
             provider=ParksCanadaProvider.name,
@@ -663,7 +682,7 @@ def create_alert(
         except Exception:  # noqa: BLE001 - the test ping is best-effort
             test_ok = False
 
-    interval = Config.from_env().poll_interval_minutes
+    interval = config.poll_interval_minutes
     stay = f"{start_date.isoformat()} to {end_date.isoformat()}"
     lines = [
         f"Done. I am now watching that campground for {stay}, party of "

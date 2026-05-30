@@ -147,6 +147,17 @@ disable/expose the alert tools per deployment; lock `notify_target` down to the
 ntfy base host + block private IPs; add rate limiting. These also harden the
 authenticated build later.
 
+**Status: done.** All three are implemented and tested:
+- `enable_alerts` flag hides the alert tools and stops the poller in preview mode.
+- `notify_target` is validated at the boundary (`notify.validate_notify_target`)
+  and re-validated in the poller before any POST: the host must be on an allowlist
+  (the configured ntfy host by default, extendable via
+  `OPEN_STATE_NOTIFY_ALLOWED_HOSTS`), and IP-literal targets in private/loopback/
+  link-local ranges are refused — closing the open-relay and SSRF-to-metadata
+  vectors. A per-instance active-watch cap (`OPEN_STATE_MAX_ACTIVE_ALERTS`,
+  default 50) bounds background polling.
+- Global rate limiting ships (3 req/s, burst 10 in the preview deployment).
+
 ### Outcome (option A shipped)
 
 Option A is deployed to Azure Container Apps (Canada Central, scale-to-zero, rate

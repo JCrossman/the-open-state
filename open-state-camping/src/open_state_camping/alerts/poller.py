@@ -21,7 +21,8 @@ import httpx
 
 from open_state_camping.alerts.store import Alert, AlertStore
 from open_state_camping.config import Config
-from open_state_camping.providers.base import CampingProvider
+from open_state_camping.notify import allowed_notify_hosts, validate_notify_target
+from open_state_camping.providers.base import CampingProvider, InvalidInputError
 from open_state_camping.tls import verify_setting
 
 logger = logging.getLogger(__name__)
@@ -95,6 +96,16 @@ class AlertPoller:
         summary = f"{len(sites)} site(s) open ({accessible} accessible)"
         self._store.mark_fired(alert.id, summary)
         if alert.notify_target:
+            # Defense in depth: re-check the stored target before POSTing, so a
+            # target that slipped in (older record, future bug) can never make
+            # the server POST to an internal or arbitrary host (SSRF/relay).
+            try:
+                validate_notify_target(
+                    alert.notify_target, allowed_notify_hosts(self._config)
+                )
+            except InvalidInputError as exc:
+                logger.warning("Refusing to notify alert %s: %s", alert.id, exc)
+                return
             message = _hit_message(alert, sites)
             try:
                 await self._notify(alert.notify_target, message)
