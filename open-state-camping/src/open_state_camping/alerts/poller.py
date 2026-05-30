@@ -22,6 +22,7 @@ import httpx
 from open_state_camping.alerts.store import Alert, AlertStore
 from open_state_camping.config import Config
 from open_state_camping.providers.base import CampingProvider
+from open_state_camping.tls import verify_setting
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +131,6 @@ async def _http_notify(target: str, message: str) -> bool:
     The target is a URL the citizen controls (e.g. an ntfy.sh topic). We store no
     account or credential - only the link they gave us (Constitution Art. 1).
     """
-    async with httpx.AsyncClient(timeout=15.0) as client:
+    async with httpx.AsyncClient(timeout=15.0, verify=verify_setting()) as client:
         resp = await client.post(target, content=message.encode("utf-8"))
         return resp.is_success

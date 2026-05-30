@@ -17,6 +17,8 @@ from typing import Any, Iterable, Optional
 
 import httpx
 
+from open_state_camping.tls import verify_setting
+
 # --- Platform constants (verified against the live API) ---------------------
 
 # Resource categories that represent reservable campsites.
@@ -87,6 +89,7 @@ class GoingToCampClient:
         self._client = http_client or httpx.Client(
             timeout=timeout,
             follow_redirects=True,
+            verify=verify_setting(),
             headers={
                 "User-Agent": user_agent,
                 "Accept": "application/json, text/plain, */*",

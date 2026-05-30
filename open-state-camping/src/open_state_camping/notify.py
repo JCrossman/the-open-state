@@ -20,6 +20,8 @@ from urllib.parse import urlparse
 
 import httpx
 
+from open_state_camping.tls import verify_setting
+
 # A recognizable prefix plus a random suffix: the suffix keeps the full topic
 # unguessable, which is what makes an open ntfy topic effectively private.
 _TOPIC_PREFIX = "openstate-"
@@ -59,6 +61,6 @@ def send_message(
     and the optional ``Title`` header into its title.
     """
     headers = {"Title": title} if title else None
-    with httpx.Client(timeout=timeout) as client:
+    with httpx.Client(timeout=timeout, verify=verify_setting()) as client:
         resp = client.post(target, content=message.encode("utf-8"), headers=headers)
         return resp.is_success
