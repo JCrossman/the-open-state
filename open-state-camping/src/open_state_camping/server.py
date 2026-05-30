@@ -36,6 +36,7 @@ from starlette.responses import JSONResponse, PlainTextResponse
 from open_state_camping.alerts import AlertPoller, AlertStore, build_store
 from open_state_camping.config import Config
 from open_state_camping.notify import generate_channel, send_message
+from open_state_camping.providers.base import InvalidInputError
 from open_state_camping.providers.going_to_camp.client import QueueItError, UpstreamError
 from open_state_camping.providers.parks_canada import (
     PARKS_CANADA_REC_AREA_ID,
@@ -135,8 +136,16 @@ def _readonly(title: str) -> ToolAnnotations:
 
 def _problem(exc: Exception) -> str:
     """Turn an error into a plain-language message for the citizen (Art. 7.2)."""
+    if isinstance(exc, InvalidInputError):
+        # A problem with the request, not the platform: the message names the
+        # valid options, so pass it straight through.
+        return str(exc)
     if isinstance(exc, (QueueItError, UpstreamError)):
         return str(exc)
+    # Anything else is unexpected; log it (the generic message below hides the
+    # cause from the citizen, so it must not also hide it from us) and surface a
+    # friendly line.
+    logger.warning("Unexpected error serving a tool call: %r", exc, exc_info=exc)
     return (
         "Sorry, something went wrong while reaching the Parks Canada booking "
         "system. Please try again in a moment."
@@ -232,6 +241,10 @@ def search_sites(
     marks as accessible. `nights` finds sites open for that many consecutive
     nights within the window; `weekends_only` looks at Friday and Saturday nights.
 
+    `equipment_type` optionally limits results to sites that fit a kind of
+    equipment. Pass a plain word a citizen would use ("tent", "RV") or an
+    equipment id from `list_equipment_types`; leave it off to see all sites.
+
     The result includes a booking link the citizen opens to choose their exact
     site and confirm in their own Parks Canada session. This tool never books.
     """
@@ -320,7 +333,9 @@ def search_park_availability(
 
     `start_date` and `end_date` are arrival and departure. Set `accessible_only`
     for sites Parks Canada marks accessible; `nights` / `weekends_only` work as in
-    `search_sites`. This tool never books.
+    `search_sites`. `equipment_type` (a word like "tent" or "RV", or an id from
+    `list_equipment_types`) limits results to sites that fit it. This tool never
+    books.
     """
     try:
         results = get_provider().search_park_availability(
@@ -345,6 +360,8 @@ def search_park_availability(
     stay = f"{start_date.isoformat()} to {end_date.isoformat()}"
     acc = " (accessible sites only)" if accessible_only else ""
     with_sites = [r for r in results if r.open_site_count > 0]
+    empty = [r for r in results if r.open_site_count == 0 and r.error is None]
+    errored = [r for r in results if r.error is not None]
     lines = [
         f'Availability for "{query}", {stay}, party of {party_size}{acc}. '
         + _INDEPENDENCE_NOTE,
@@ -368,26 +385,36 @@ def search_park_availability(
             "individual sites, then prepare_booking_url to book in your own "
             "Parks Canada session. This tool never books.",
         ]
-    else:
+    elif empty:
+        # At least one campground answered and none had openings. Only claim "no
+        # openings" about campgrounds we actually reached - the errored ones
+        # below are unknown, not full.
         lines.append(
-            "No campgrounds in that park have open sites for those dates. Sites "
-            "in popular parks fill quickly; you can ask me to watch a specific "
-            "campground and alert you if one opens up."
+            "No campgrounds I could check in that park have open sites for those "
+            "dates. Sites in popular parks fill quickly; you can ask me to watch "
+            "a specific campground and alert you if one opens up."
+        )
+    else:
+        # Every campground failed: we have no availability data at all, so do
+        # not say "no openings" - that would imply we checked (Art. 7.1).
+        lines.append(
+            "I could not reach the booking system to check this park's "
+            "campgrounds right now, so I have no availability to report. Please "
+            "try again in a moment."
         )
 
-    empty = [r for r in results if r.open_site_count == 0 and r.error is None]
     if empty and with_sites:
         lines.append("")
         lines.append(
             "No openings at: " + ", ".join(r.campground_name for r in empty) + "."
         )
-    errored = [r for r in results if r.error is not None]
     if errored:
         lines.append("")
         lines.append(
-            "I could not check: "
+            "I could not check these, so there may be openings here I am not "
+            "seeing: "
             + ", ".join(r.campground_name for r in errored)
-            + ". You can try those individually with search_sites."
+            + ". You can try them individually with search_sites."
         )
     return "\n".join(lines)
 

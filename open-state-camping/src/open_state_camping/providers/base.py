@@ -27,6 +27,17 @@ from datetime import date
 from typing import ClassVar, Optional
 
 
+class InvalidInputError(ValueError):
+    """A tool argument was malformed or could not be resolved.
+
+    Raised when a citizen-supplied value cannot be used as given - for example
+    an ``equipment_type`` that matches no known equipment, or matches several so
+    the choice is ambiguous. Distinct from ``UpstreamError`` (the booking
+    platform failed): this is a problem with the request, so the message names
+    the valid options rather than guessing one (Constitution Art. 7.1).
+    """
+
+
 @dataclass(frozen=True, slots=True)
 class Campground:
     """One bookable campground inside a recreation area.

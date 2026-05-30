@@ -104,6 +104,82 @@ def test_search_park_availability_unknown_park_is_friendly(tools):
     assert "could not find" in out.lower()
 
 
+def test_search_park_availability_accepts_equipment_word(tools):
+    # A plain word a citizen would say ("van") resolves to an id instead of
+    # crashing the search (regression: int("van") used to raise per campground).
+    out = tools.search_park_availability.fn(
+        query="Banff", start_date=START, end_date=END, party_size=2,
+        equipment_type="van",
+    )
+    assert "not operated by or endorsed by Parks Canada" in out
+    assert "could not check" not in out.lower()
+
+
+def test_search_park_availability_ambiguous_equipment_is_clear_not_masked(tools):
+    # "tent" is ambiguous: the citizen gets the listed options, NOT a misleading
+    # "could not check / no openings" that hides real availability.
+    out = tools.search_park_availability.fn(
+        query="Banff", start_date=START, end_date=END, party_size=2,
+        equipment_type="tent",
+    )
+    assert "-32768" in out  # specific equipment options are named
+    assert "could not check" not in out.lower()
+    assert "no campgrounds" not in out.lower()
+
+
+def test_search_park_availability_all_errored_does_not_claim_no_openings(
+    tmp_path, monkeypatch
+):
+    """When no campground can be checked, we must not report 'no openings'.
+
+    Regression for the bug where an upstream failure on every campground was
+    rendered as 'No campgrounds have open sites' - implying we checked and found
+    them full, when we have no availability data at all.
+    """
+    import json
+    import pathlib
+
+    import httpx
+
+    from open_state_camping.config import Config
+    from open_state_camping.providers.going_to_camp.client import GoingToCampClient
+    from open_state_camping.providers.parks_canada import ParksCanadaProvider
+
+    fixtures = pathlib.Path(__file__).parent / "fixtures" / "parks_canada"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/api/availability/map":
+            return httpx.Response(500, json={"error": "boom"})  # upstream down
+        name = {
+            "/api/resourceLocation": "resourceLocation_min.json",
+            "/api/equipment": "equipment.json",
+            "/api/resourcelocation/resources": "resources_min.json",
+            "/api/attribute/filterable": "attribute_filterable_min.json",
+        }.get(path)
+        if name:
+            return httpx.Response(200, json=json.loads((fixtures / name).read_text()))
+        return httpx.Response(404, json={"error": path})
+
+    client = GoingToCampClient(
+        "reservation.pc.gc.ca",
+        user_agent="test",
+        http_client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    monkeypatch.setattr(
+        server, "_provider", ParksCanadaProvider(client=client, config=Config())
+    )
+
+    out = server.search_park_availability.fn(
+        query="Banff", start_date=START, end_date=END, party_size=2
+    )
+    lower = out.lower()
+    assert "no openings" not in lower
+    assert "no campgrounds i could check" not in lower
+    assert "could not reach the booking system" in lower
+    assert "could not check these" in lower  # unknown, not full
+
+
 def test_get_site_details(tools):
     out = tools.get_site_details.fn(campground_id=CAMPGROUND_ID, campsite_id=SITE_104)
     assert "accessible" in out.lower()
