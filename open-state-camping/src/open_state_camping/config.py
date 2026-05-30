@@ -44,6 +44,26 @@ class Config:
     # Base URL for auto-provisioned notification channels. ntfy.sh needs no
     # sign-up; an operator can point this at a self-hosted ntfy for privacy.
     ntfy_base: str = "https://ntfy.sh"
+    # Remote serving (M2). Ignored under stdio. The poller runs in the ASGI
+    # lifespan, so a hosted instance must stay always-on (min replicas >= 1).
+    host: str = "127.0.0.1"
+    port: int = 8000
+    mcp_path: str = "/mcp"
+    # Stateless HTTP so multiple replicas do not break sessions (M2 hosting).
+    stateless_http: bool = True
+    # Alert storage backend. "sqlite" is the local M1 default; managed backends
+    # arrive with M2 and implement the same AlertStore method surface.
+    alert_backend: str = "sqlite"
+    # Read-only preview switch. When False, the alert tools (create/list/delete)
+    # are not exposed and the poller does not run - used for an unauthenticated
+    # public preview of the public-data, prepare-only tools (docs/m2-validation-
+    # findings.md, decision 2). Alerts return when they are scoped behind auth.
+    enable_alerts: bool = True
+    # Global request rate limit for HTTP serving (upstream politeness, Art. 7.3).
+    # All Claude traffic shares Anthropic's IP range, so the limit is global, not
+    # per-client. <= 0 disables. Applied only under the http transport.
+    rate_limit_rps: float = 5.0
+    rate_limit_burst: int = 20
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -59,6 +79,14 @@ class Config:
             user_agent=os.getenv("OPEN_STATE_USER_AGENT", _DEFAULT_USER_AGENT),
             http_timeout_seconds=float(os.getenv("OPEN_STATE_HTTP_TIMEOUT", "30")),
             ntfy_base=os.getenv("OPEN_STATE_NTFY_BASE", "https://ntfy.sh"),
+            host=os.getenv("OPEN_STATE_HOST", "127.0.0.1"),
+            port=int(os.getenv("OPEN_STATE_PORT", "8000")),
+            mcp_path=os.getenv("OPEN_STATE_MCP_PATH", "/mcp"),
+            stateless_http=_env_bool("OPEN_STATE_STATELESS_HTTP", True),
+            alert_backend=os.getenv("OPEN_STATE_ALERT_BACKEND", "sqlite"),
+            enable_alerts=_env_bool("OPEN_STATE_ENABLE_ALERTS", True),
+            rate_limit_rps=float(os.getenv("OPEN_STATE_RATE_LIMIT_RPS", "5")),
+            rate_limit_burst=int(os.getenv("OPEN_STATE_RATE_LIMIT_BURST", "20")),
         )
 
 
@@ -71,3 +99,11 @@ def enforce_polling_floor(minutes: int) -> int:
     if minutes < POLLING_INTERVAL_MINIMUM_MINUTES:
         return POLLING_INTERVAL_MINIMUM_MINUTES
     return minutes
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    """Parse a boolean environment variable; accept the usual truthy spellings."""
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}

@@ -16,6 +16,7 @@ from open_state_camping.providers import (
     CampingProvider,
     ParksCanadaProvider,
 )
+from open_state_camping.providers.base import InvalidInputError
 from open_state_camping.providers.going_to_camp.client import (
     UpstreamError,
     resource_is_accessible,
@@ -71,6 +72,49 @@ def test_list_equipment_types(provider: ParksCanadaProvider):
     types = provider.list_equipment_types("14")
     assert types, "expected at least one equipment type"
     assert all(t.equipment_id and t.name for t in types)
+
+
+def test_search_sites_accepts_equipment_id(provider: ParksCanadaProvider):
+    # A known equipment id is used directly (no exception, real results).
+    assert _search(provider, equipment_type="-32768")
+
+
+def test_search_sites_accepts_unambiguous_equipment_word(provider: ParksCanadaProvider):
+    # "van" matches exactly one type (Van/Pickup), so it resolves cleanly -
+    # this is the case that used to crash on int("van").
+    assert isinstance(_search(provider, equipment_type="van"), list)
+
+
+def test_search_sites_ambiguous_equipment_word_is_flagged(provider: ParksCanadaProvider):
+    # "tent" matches several types; we name the options, not guess one (Art 7.1).
+    with pytest.raises(InvalidInputError) as exc:
+        _search(provider, equipment_type="tent")
+    assert "-32768" in str(exc.value)  # specific options are listed with ids
+
+
+def test_search_sites_unknown_equipment_word_is_flagged(provider: ParksCanadaProvider):
+    with pytest.raises(InvalidInputError):
+        _search(provider, equipment_type="submarine")
+
+
+def test_search_sites_unknown_equipment_id_is_flagged(provider: ParksCanadaProvider):
+    with pytest.raises(InvalidInputError):
+        _search(provider, equipment_type="999999")
+
+
+def test_park_availability_validates_equipment_once_not_per_campground(
+    provider: ParksCanadaProvider,
+):
+    # A bad equipment word must fail fast for the whole search rather than be
+    # recorded as "could not check" on every campground row.
+    with pytest.raises(InvalidInputError):
+        provider.search_park_availability(
+            query="Banff",
+            start_date=START,
+            end_date=END,
+            party_size=2,
+            equipment_type="tent",
+        )
 
 
 def test_default_search_requires_whole_stay_open(provider: ParksCanadaProvider):
@@ -154,6 +198,43 @@ def test_site_details_includes_accessibility_amenities_and_photos(
     assert any(a.startswith("Service Type:") for a in details.amenities)
     # Photos use the real shape (photos[].photoUrlResult.url).
     assert details.photos and all(u.startswith("http") for u in details.photos)
+
+
+def test_fetch_photo_returns_image_bytes(provider: ParksCanadaProvider):
+    details = provider.site_details(
+        recreation_area_id="14", campground_id=CAMPGROUND_ID, campsite_id=SITE_104
+    )
+    fetched = provider.fetch_photo(details.photos[0])
+    assert fetched is not None
+    data, fmt = fetched
+    assert data.startswith(b"\xff\xd8")  # JPEG magic
+    assert fmt == "jpeg"
+
+
+def test_fetch_photo_rejects_offsite_urls(provider: ParksCanadaProvider):
+    # SSRF guard: only this platform's own https image host is fetched.
+    assert provider.fetch_photo("http://reservation.pc.gc.ca/images/x.jpg") is None
+    assert provider.fetch_photo("https://evil.example.com/x.jpg") is None
+    assert provider.fetch_photo("https://169.254.169.254/latest/meta-data") is None
+
+
+def test_search_park_availability_covers_all_matching_campgrounds(
+    provider: ParksCanadaProvider,
+):
+    results = provider.search_park_availability(
+        query="Banff", start_date=START, end_date=END, party_size=2
+    )
+    # Both Banff campgrounds in the fixture are checked in one call.
+    names = {r.campground_name for r in results}
+    assert "Banff - Tunnel Mountain Trailer Court" in names
+    assert "Banff - Two Jack Lakeside" in names
+    # The campground with fixture availability reports open sites.
+    main = next(r for r in results if r.campground_id == CAMPGROUND_ID)
+    assert main.open_site_count > 0
+    assert main.error is None
+    # Results are sorted with the most-open campgrounds first.
+    counts = [r.open_site_count for r in results if r.error is None]
+    assert counts == sorted(counts, reverse=True)
 
 
 def test_resource_is_accessible_reads_attribute_minus_32756():

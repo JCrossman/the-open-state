@@ -43,6 +43,11 @@ def _handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json=_load("availability_child.json"))
     if path == "/api/attribute/filterable":
         return httpx.Response(200, json=_load("attribute_filterable_min.json"))
+    if path.startswith("/images/"):
+        # Minimal valid JPEG (SOI + EOI) so image fetching can be tested offline.
+        return httpx.Response(
+            200, content=b"\xff\xd8\xff\xd9", headers={"content-type": "image/jpeg"}
+        )
     return httpx.Response(404, json={"error": f"unexpected path {path}"})
 
 

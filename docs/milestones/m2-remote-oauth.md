@@ -16,6 +16,8 @@ The same server, hosted, reachable as a remote MCP connector that a citizen adds
 
 ## Validation gates (confirm before building)
 
+> Research findings for these gates (and the IdP / unauthenticated-host decisions) are in [`../m2-validation-findings.md`](../m2-validation-findings.md). Re-verify before building.
+
 - **G1:** Confirm the current one-click “add custom connector / add app” flow and its OAuth expectations for each target client you care about (Claude first). Client behavior here changes; verify against current docs at build time, do not assume.
 - **G2:** Confirm Anthropic’s connector reaches your server from their cloud (even for Desktop/Cowork the connection originates server-side). Ensure the host is public-internet-reachable and, if required, allowlist their ranges.
 - **G3:** Confirm the booking hand-off still works without any government credential on the server. M2 does NOT add government auth. The citizen still confirms in their own session.

@@ -127,6 +127,30 @@ class GoingToCampClient:
                 f"response for {path}."
             ) from exc
 
+    def fetch_image(self, url: str) -> Optional[tuple[bytes, str]]:
+        """Fetch a photo by absolute URL, returning (bytes, format) or None.
+
+        Used to deliver site photos as viewable image content. Best-effort: a
+        photo that does not load must never fail the surrounding tool call. Only
+        absolute https URLs on this platform's own image host are fetched, so the
+        tool can never be turned into a general-purpose URL fetcher (SSRF guard).
+        """
+        if not url.startswith("https://"):
+            return None
+        if not url.startswith(self._base + "/"):
+            return None
+        try:
+            resp = self._client.get(url)
+        except httpx.HTTPError:
+            return None
+        if resp.status_code != 200:
+            return None
+        content_type = resp.headers.get("content-type", "")
+        if not content_type.startswith("image/"):
+            return None
+        fmt = content_type.split("/", 1)[1].split(";")[0].strip() or "jpeg"
+        return resp.content, fmt
+
     # -- endpoints ----------------------------------------------------------
 
     def list_campgrounds(self) -> list[dict[str, Any]]:

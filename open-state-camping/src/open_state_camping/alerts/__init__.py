@@ -5,6 +5,6 @@ Art. 5). The poller only notifies; the citizen books in their own session.
 """
 
 from open_state_camping.alerts.poller import AlertPoller
-from open_state_camping.alerts.store import Alert, AlertStore
+from open_state_camping.alerts.store import Alert, AlertStore, build_store
 
-__all__ = ["Alert", "AlertStore", "AlertPoller"]
+__all__ = ["Alert", "AlertStore", "AlertPoller", "build_store"]

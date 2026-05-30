@@ -28,8 +28,10 @@ from open_state_camping.config import Config
 from open_state_camping.providers.base import (
     AvailableSite,
     Campground,
+    CampgroundAvailability,
     CampingProvider,
     EquipmentType,
+    InvalidInputError,
     RecreationArea,
     SiteDetails,
 )
@@ -67,6 +69,7 @@ class ParksCanadaProvider(CampingProvider):
         )
         self._campgrounds_cache: Optional[list[dict[str, Any]]] = None
         self._attr_defs_cache: Optional[dict[str, Any]] = None
+        self._equipment_cache: Optional[list[dict[str, Any]]] = None
 
     # -- interface ----------------------------------------------------------
 
@@ -148,7 +151,7 @@ class ParksCanadaProvider(CampingProvider):
             raise UpstreamError(
                 f"Could not find a Parks Canada campground with id {campground_id}."
             )
-        equipment_id = int(equipment_type) if equipment_type is not None else None
+        equipment_id = self._resolve_equipment_id(equipment_type)
         resources = self._client.get_resources(campground_id)
         daily = self._client.daily_availability(
             root_map_id=root_map_id,
@@ -206,6 +209,71 @@ class ParksCanadaProvider(CampingProvider):
         sites.sort(key=lambda s: (not s.accessible, _name_sort_key(s.site_name)))
         return sites
 
+    def search_park_availability(
+        self,
+        *,
+        query: str,
+        start_date: _dt.date,
+        end_date: _dt.date,
+        party_size: int,
+        equipment_type: Optional[str] = None,
+        accessible_only: bool = False,
+        nights: Optional[int] = None,
+        weekends_only: bool = False,
+    ) -> list[CampgroundAvailability]:
+        """Search every campground matching ``query`` and summarize availability.
+
+        One call answers "anything open in Banff?" across all of that park's
+        campgrounds, so the assistant does not have to loop and cannot silently
+        miss one. A failure checking a single campground is captured on that row
+        (``error``) rather than aborting the whole search.
+        """
+        # Resolve once up front: a bad equipment_type is a problem with the
+        # request, not with any one campground, so fail fast with a clear
+        # message instead of recording it as "could not check" on every row.
+        self._resolve_equipment_id(equipment_type)
+        areas = self.search_parks(query)
+        campgrounds = areas[0].campgrounds if areas else ()
+        results: list[CampgroundAvailability] = []
+        for cg in campgrounds:
+            try:
+                sites = self.search_sites(
+                    recreation_area_id=cg.recreation_area_id,
+                    campground_id=cg.campground_id,
+                    start_date=start_date,
+                    end_date=end_date,
+                    party_size=party_size,
+                    equipment_type=equipment_type,
+                    accessible_only=accessible_only,
+                    nights=nights,
+                    weekends_only=weekends_only,
+                )
+                results.append(
+                    CampgroundAvailability(
+                        provider=self.name,
+                        recreation_area_id=cg.recreation_area_id,
+                        campground_id=cg.campground_id,
+                        campground_name=cg.name,
+                        open_site_count=len(sites),
+                        accessible_count=sum(1 for s in sites if s.accessible),
+                    )
+                )
+            except Exception as exc:  # noqa: BLE001 - one bad campground must not sink the search
+                results.append(
+                    CampgroundAvailability(
+                        provider=self.name,
+                        recreation_area_id=cg.recreation_area_id,
+                        campground_id=cg.campground_id,
+                        campground_name=cg.name,
+                        open_site_count=0,
+                        accessible_count=0,
+                        error=str(exc),
+                    )
+                )
+        # Most open sites first; campgrounds with nothing fall to the bottom.
+        results.sort(key=lambda r: (r.error is not None, -r.open_site_count))
+        return results
+
     def site_details(
         self,
         *,
@@ -240,6 +308,10 @@ class ParksCanadaProvider(CampingProvider):
             max_occupancy=resource.get("maxCapacity"),
             site_type=service_label,
         )
+
+    def fetch_photo(self, url: str) -> Optional[tuple[bytes, str]]:
+        """Fetch one site photo as (bytes, format), or None if it cannot load."""
+        return self._client.fetch_image(url)
 
     def booking_url(
         self,
@@ -295,6 +367,65 @@ class ParksCanadaProvider(CampingProvider):
             self._attr_defs_cache = self._client.attribute_definitions()
         return self._attr_defs_cache
 
+    def _equipment(self) -> list[dict[str, Any]]:
+        if self._equipment_cache is None:
+            self._equipment_cache = self._client.list_equipment_types()
+        return self._equipment_cache
+
+    def _resolve_equipment_id(self, equipment_type: Optional[str]) -> Optional[int]:
+        """Turn a citizen's equipment word or id into the platform's id.
+
+        ``equipment_type`` may be an equipment id from ``list_equipment_types``
+        (for example ``"-32768"``) or a plain word a person would say (for
+        example ``"tent"`` or ``"RV"``). A word is matched against the known
+        equipment names; an exact id is used as-is. When a word matches several
+        types (``"tent"`` -> Small/Medium/Large Tent) we name the options and ask
+        the caller to choose rather than guessing one (Constitution Art. 7.1),
+        and an unknown word lists what is valid. ``None`` means no filter.
+        """
+        if equipment_type is None:
+            return None
+
+        text = equipment_type.strip()
+        if not text:
+            return None
+
+        equipment = self._equipment()
+
+        # An equipment id passed straight through (any known id, e.g. "-32768").
+        try:
+            as_id = int(text)
+        except ValueError:
+            as_id = None
+        if as_id is not None:
+            known = {int(e["equipment_id"]) for e in equipment}
+            if not known or as_id in known:
+                return as_id
+            raise InvalidInputError(
+                f"{equipment_type!r} is not a known equipment id. "
+                + _equipment_options(equipment)
+            )
+
+        # A plain word: match by name, case-insensitive substring either way.
+        needle = text.casefold()
+        matches = [
+            e
+            for e in equipment
+            if needle in (e["name"] or "").casefold()
+            or (e["name"] or "").casefold() in needle
+        ]
+        if len(matches) == 1:
+            return int(matches[0]["equipment_id"])
+        if not matches:
+            raise InvalidInputError(
+                f"I do not recognize the equipment {equipment_type!r}. "
+                + _equipment_options(equipment)
+            )
+        raise InvalidInputError(
+            f"{equipment_type!r} matches several equipment types - tell me which "
+            "one (by id). " + _equipment_options(matches)
+        )
+
     def _service_type_label(self, resource: dict[str, Any]) -> Optional[str]:
         labels = _enum_labels(self._attr_defs(), SERVICE_TYPE_ATTR)
         for value in _attr_values(resource, SERVICE_TYPE_ATTR):
@@ -326,6 +457,16 @@ class ParksCanadaProvider(CampingProvider):
 
 
 # -- module-level pure helpers ---------------------------------------------
+
+
+def _equipment_options(equipment: list[dict[str, Any]]) -> str:
+    """Render equipment choices as 'Name (id), ...' for a clarifying message."""
+    if not equipment:
+        return "Use list_equipment_types to see the valid equipment ids."
+    listed = ", ".join(
+        f"{e['name'] or 'equipment'} ({e['equipment_id']})" for e in equipment
+    )
+    return f"Valid options are: {listed}."
 
 
 def _resource_name(resource: dict[str, Any]) -> Optional[str]:

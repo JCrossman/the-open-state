@@ -25,14 +25,18 @@ import asyncio
 import datetime as _dt
 import logging
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Optional, Union
 
 from fastmcp import FastMCP
+from fastmcp.utilities.types import Image
 from mcp.types import ToolAnnotations
+from starlette.requests import Request
+from starlette.responses import JSONResponse, PlainTextResponse
 
-from open_state_camping.alerts import AlertPoller, AlertStore
+from open_state_camping.alerts import AlertPoller, AlertStore, build_store
 from open_state_camping.config import Config
 from open_state_camping.notify import generate_channel, send_message
+from open_state_camping.providers.base import InvalidInputError
 from open_state_camping.providers.going_to_camp.client import QueueItError, UpstreamError
 from open_state_camping.providers.parks_canada import (
     PARKS_CANADA_REC_AREA_ID,
@@ -46,9 +50,13 @@ logger = logging.getLogger(__name__)
 async def _lifespan(_app: FastMCP):
     """Run the alert poller in the background for the life of the server.
 
-    M2 moves this into the ASGI lifespan of the hosted app; for M1 (stdio) the
-    poller runs while the citizen's assistant session is open.
+    Hosted (M2) this is the ASGI lifespan; local (stdio) the poller runs while the
+    citizen's assistant session is open. In the read-only preview (alerts
+    disabled) there are no watches, so the poller does not run at all.
     """
+    if not Config.from_env().enable_alerts:
+        yield
+        return
     poller = AlertPoller(get_store(), _resolve_provider, Config.from_env())
     task = asyncio.create_task(poller.run())
     try:
@@ -62,7 +70,31 @@ async def _lifespan(_app: FastMCP):
             pass
 
 
-mcp = FastMCP("Open State: Camping", lifespan=_lifespan)
+# In the read-only preview, hide the alert tools by tag (they assume a single
+# trusted user; they return scoped behind auth - docs/m2-validation-findings.md).
+mcp = FastMCP(
+    "Open State: Camping",
+    lifespan=_lifespan,
+    exclude_tags=None if Config.from_env().enable_alerts else {"alerts"},
+)
+
+
+@mcp.custom_route("/health", methods=["GET"])
+async def health(_request: Request) -> JSONResponse:
+    """Liveness probe, separate from /mcp and unauthenticated (M2 hosting)."""
+    return JSONResponse({"status": "ok", "service": "open-state-camping"})
+
+
+@mcp.custom_route("/", methods=["GET"])
+async def root(_request: Request) -> PlainTextResponse:
+    """Friendly note for a human who opens the public URL in a browser."""
+    return PlainTextResponse(
+        "The Open State: Camping - an independent, public-interest tool for "
+        "searching Parks Canada campsite availability through your own AI "
+        "assistant. It is not operated by or endorsed by Parks Canada.\n\n"
+        "This is a Model Context Protocol (MCP) server. Connect an MCP client to "
+        "the /mcp endpoint. Health: /health\n"
+    )
 
 _INDEPENDENCE_NOTE = (
     "The Open State is an independent public-interest tool. It is not operated by "
@@ -82,10 +114,11 @@ def get_provider() -> ParksCanadaProvider:
 
 
 def get_store() -> AlertStore:
-    """Build the alert store on first use."""
+    """Build the alert store on first use, selecting the configured backend."""
     global _store
     if _store is None:
-        _store = AlertStore(Config.from_env().alert_db_path)
+        config = Config.from_env()
+        _store = build_store(config.alert_backend, config.alert_db_path)
     return _store
 
 
@@ -103,8 +136,16 @@ def _readonly(title: str) -> ToolAnnotations:
 
 def _problem(exc: Exception) -> str:
     """Turn an error into a plain-language message for the citizen (Art. 7.2)."""
+    if isinstance(exc, InvalidInputError):
+        # A problem with the request, not the platform: the message names the
+        # valid options, so pass it straight through.
+        return str(exc)
     if isinstance(exc, (QueueItError, UpstreamError)):
         return str(exc)
+    # Anything else is unexpected; log it (the generic message below hides the
+    # cause from the citizen, so it must not also hide it from us) and surface a
+    # friendly line.
+    logger.warning("Unexpected error serving a tool call: %r", exc, exc_info=exc)
     return (
         "Sorry, something went wrong while reaching the Parks Canada booking "
         "system. Please try again in a moment."
@@ -200,6 +241,10 @@ def search_sites(
     marks as accessible. `nights` finds sites open for that many consecutive
     nights within the window; `weekends_only` looks at Friday and Saturday nights.
 
+    `equipment_type` optionally limits results to sites that fit a kind of
+    equipment. Pass a plain word a citizen would use ("tent", "RV") or an
+    equipment id from `list_equipment_types`; leave it off to see all sites.
+
     The result includes a booking link the citizen opens to choose their exact
     site and confirm in their own Parks Canada session. This tool never books.
     """
@@ -266,17 +311,136 @@ def search_sites(
 
 
 @mcp.tool(
+    annotations=_readonly("Search a whole park for availability"),
+)
+def search_park_availability(
+    query: str,
+    start_date: _dt.date,
+    end_date: _dt.date,
+    party_size: int,
+    equipment_type: Optional[str] = None,
+    accessible_only: bool = False,
+    nights: Optional[int] = None,
+    weekends_only: bool = False,
+) -> str:
+    """Check every campground in a park at once and say which have openings.
+
+    Use this when a citizen names a place rather than one campground - for
+    example "anything open in Banff?" It searches all of that park's campgrounds
+    for the dates and party size in a single step and returns one consolidated
+    list, so nothing is missed. Then use `search_sites` on a campground that has
+    openings to see the individual sites, and `prepare_booking_url` to book.
+
+    `start_date` and `end_date` are arrival and departure. Set `accessible_only`
+    for sites Parks Canada marks accessible; `nights` / `weekends_only` work as in
+    `search_sites`. `equipment_type` (a word like "tent" or "RV", or an id from
+    `list_equipment_types`) limits results to sites that fit it. This tool never
+    books.
+    """
+    try:
+        results = get_provider().search_park_availability(
+            query=query,
+            start_date=start_date,
+            end_date=end_date,
+            party_size=party_size,
+            equipment_type=equipment_type,
+            accessible_only=accessible_only,
+            nights=nights,
+            weekends_only=weekends_only,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return _problem(exc)
+
+    if not results:
+        return (
+            f'I could not find a Parks Canada park matching "{query}". Try a '
+            "national park name such as Banff, Jasper, or Pacific Rim."
+        )
+
+    stay = f"{start_date.isoformat()} to {end_date.isoformat()}"
+    acc = " (accessible sites only)" if accessible_only else ""
+    with_sites = [r for r in results if r.open_site_count > 0]
+    empty = [r for r in results if r.open_site_count == 0 and r.error is None]
+    errored = [r for r in results if r.error is not None]
+    lines = [
+        f'Availability for "{query}", {stay}, party of {party_size}{acc}. '
+        + _INDEPENDENCE_NOTE,
+        "",
+    ]
+    if with_sites:
+        lines.append("Campgrounds with openings:")
+        for r in with_sites:
+            note = (
+                f", {r.accessible_count} marked accessible"
+                if r.accessible_count
+                else ""
+            )
+            lines.append(
+                f"- {r.campground_name}: {r.open_site_count} open site(s){note} "
+                f"(campground id: {r.campground_id})"
+            )
+        lines += [
+            "",
+            "Use search_sites with one of these campground ids to see the "
+            "individual sites, then prepare_booking_url to book in your own "
+            "Parks Canada session. This tool never books.",
+        ]
+    elif empty:
+        # At least one campground answered and none had openings. Only claim "no
+        # openings" about campgrounds we actually reached - the errored ones
+        # below are unknown, not full.
+        lines.append(
+            "No campgrounds I could check in that park have open sites for those "
+            "dates. Sites in popular parks fill quickly; you can ask me to watch "
+            "a specific campground and alert you if one opens up."
+        )
+    else:
+        # Every campground failed: we have no availability data at all, so do
+        # not say "no openings" - that would imply we checked (Art. 7.1).
+        lines.append(
+            "I could not reach the booking system to check this park's "
+            "campgrounds right now, so I have no availability to report. Please "
+            "try again in a moment."
+        )
+
+    if empty and with_sites:
+        lines.append("")
+        lines.append(
+            "No openings at: " + ", ".join(r.campground_name for r in empty) + "."
+        )
+    if errored:
+        lines.append("")
+        lines.append(
+            "I could not check these, so there may be openings here I am not "
+            "seeing: "
+            + ", ".join(r.campground_name for r in errored)
+            + ". You can try them individually with search_sites."
+        )
+    return "\n".join(lines)
+
+
+# A photo is ~90 KB; cap how many we ever fetch so a tool call stays light.
+_MAX_VIEWABLE_PHOTOS = 3
+
+
+@mcp.tool(
     annotations=_readonly("Get campsite details"),
 )
 def get_site_details(
     campground_id: str,
     campsite_id: str,
     recreation_area_id: str = PARKS_CANADA_REC_AREA_ID,
-) -> str:
+    include_photos: bool = False,
+) -> Union[str, list]:
     """Get plain-language detail about one campsite, including accessibility.
 
     Use this when a citizen wants more about a specific site from a search
     result. Pass the campground id and the campsite id from `search_sites`.
+
+    Set `include_photos=True` when the citizen wants to *see* the site: the tool
+    then returns the actual photos as viewable images (up to three) alongside the
+    text, so they can be shown directly. Left off by default, the text still
+    lists the photo links a person can open in a browser.
     """
     try:
         details = get_provider().site_details(
@@ -300,12 +464,39 @@ def get_site_details(
     if details.amenities:
         lines.append("Site details:")
         lines.extend(f"- {amenity}" for amenity in details.amenities)
-    if details.photos:
+
+    images: list[Image] = []
+    if details.photos and include_photos:
+        provider = get_provider()
+        for url in details.photos[:_MAX_VIEWABLE_PHOTOS]:
+            fetched = provider.fetch_photo(url)
+            if fetched is not None:
+                data, fmt = fetched
+                images.append(Image(data=data, format=fmt))
+        shown = f"Showing {len(images)} photo(s) of this site." if images else (
+            "I could not load the photos right now; you can open them in a browser:"
+        )
+        lines.append(shown)
+        lines.append("Photo links: " + ", ".join(details.photos[:5]))
+    elif details.photos:
         lines.append(
-            f"There are {len(details.photos)} photo(s) of this site: "
+            f"There are {len(details.photos)} photo(s) of this site. Ask to see "
+            "them, or open these links in a browser: "
             + ", ".join(details.photos[:5])
         )
-    return "\n".join(lines)
+
+    text = "\n".join(lines)
+    if images:
+        # Return text plus viewable image content blocks so the assistant can
+        # actually look at the site, not just receive URLs. Convert each Image to
+        # an MCP ImageContent block; a bare Image is not serializable in a list.
+        from mcp.types import TextContent
+
+        return [
+            TextContent(type="text", text=text),
+            *(img.to_image_content() for img in images),
+        ]
+    return text
 
 
 @mcp.tool(
@@ -322,11 +513,27 @@ def prepare_booking_url(
 ) -> str:
     """Prepare a Parks Canada booking link the citizen opens and confirms.
 
-    Use this when a citizen has chosen where and when they want to camp. It
-    returns a link that opens the Parks Canada site with the campground, dates,
-    party size, and equipment filled in. The citizen signs in, picks their exact
-    site, and confirms and pays themselves. This tool never books or pays.
+    Use this when a citizen has chosen where and when they want to camp.
+    `equipment_type` is **required** because Parks Canada's booking page will not
+    proceed without it: ask the citizen what they are camping with (tent, RV,
+    etc.) and pass the matching equipment id from `list_equipment_types`. The link
+    opens the Parks Canada site with the campground, dates, party size, and
+    equipment filled in; the citizen signs in, picks their exact site, and
+    confirms and pays themselves. This tool never books or pays.
     """
+    # Equipment is mandatory on the Parks Canada booking form, so a link without
+    # it strands the citizen on a page they cannot submit. Guide them to pick one
+    # rather than hand back a link that will not work.
+    if equipment_type is None:
+        return _equipment_prompt(recreation_area_id, reason="missing")
+    try:
+        valid = {e.equipment_id: e.name for e in
+                 get_provider().list_equipment_types(recreation_area_id)}
+    except Exception as exc:  # noqa: BLE001
+        return _problem(exc)
+    if str(equipment_type) not in valid:
+        return _equipment_prompt(recreation_area_id, reason="invalid")
+
     try:
         url = get_provider().booking_url(
             recreation_area_id=recreation_area_id,
@@ -341,14 +548,43 @@ def prepare_booking_url(
         return _problem(exc)
 
     return (
-        "Here is your prepared Parks Canada booking link. Open it in your "
-        "browser, sign in to your own account, choose your exact site, and "
-        "confirm and pay yourself. This tool never books or pays on your "
-        "behalf.\n\n" + url
+        f"Here is your prepared Parks Canada booking link for a {valid[str(equipment_type)]}. "
+        "Open it in your browser, sign in to your own account, choose your exact "
+        "site, and confirm and pay yourself. This tool never books or pays on "
+        "your behalf.\n\n" + url
     )
 
 
+def _equipment_prompt(recreation_area_id: str, *, reason: str) -> str:
+    """Ask the citizen to choose equipment, listing the valid options.
+
+    Parks Canada requires equipment to book, so prepare_booking_url cannot make a
+    working link without it. This returns a plain-language prompt plus the real
+    options for the area, rather than a link that would fail on the page.
+    """
+    lead = (
+        "Before I can prepare a booking link, I need to know what you are camping "
+        "with - Parks Canada's booking page requires it."
+        if reason == "missing"
+        else "That equipment type is not one Parks Canada offers for this area. "
+        "Please choose one of these:"
+    )
+    try:
+        types = get_provider().list_equipment_types(recreation_area_id)
+    except Exception as exc:  # noqa: BLE001
+        return _problem(exc)
+    lines = [lead, ""]
+    for t in types:
+        lines.append(f"- {t.name} (equipment id: {t.equipment_id})")
+    lines += [
+        "",
+        "Tell me which one fits, and I will prepare your booking link.",
+    ]
+    return "\n".join(lines)
+
+
 @mcp.tool(
+    tags={"alerts"},
     annotations=ToolAnnotations(
         title="Set a cancellation alert",
         readOnlyHint=False,
@@ -472,6 +708,7 @@ def create_alert(
 
 
 @mcp.tool(
+    tags={"alerts"},
     annotations=ToolAnnotations(title="List your cancellation alerts", readOnlyHint=True),
 )
 def list_alerts() -> str:
@@ -503,6 +740,7 @@ def list_alerts() -> str:
 
 
 @mcp.tool(
+    tags={"alerts"},
     annotations=ToolAnnotations(
         title="Delete a cancellation alert",
         readOnlyHint=False,
@@ -525,7 +763,28 @@ def main() -> None:
     """Run the MCP server. Defaults to stdio (M1); HTTP is selected via env (M2+)."""
     config = Config.from_env()
     if config.transport == "http":
-        mcp.run(transport="http")
+        # Global rate limit for upstream politeness (Art. 7.3). global_limit=True
+        # is a single shared bucket - right here because all Claude traffic
+        # arrives from one IP range, so per-client limiting would not bite.
+        if config.rate_limit_rps > 0:
+            from fastmcp.server.middleware.rate_limiting import RateLimitingMiddleware
+
+            mcp.add_middleware(
+                RateLimitingMiddleware(
+                    max_requests_per_second=config.rate_limit_rps,
+                    burst_capacity=config.rate_limit_burst,
+                    global_limit=True,
+                )
+            )
+        # Streamable HTTP at /mcp; /health and / are served alongside for probes.
+        # stateless_http keeps multi-replica hosting (M2) from breaking sessions.
+        mcp.run(
+            transport="http",
+            host=config.host,
+            port=config.port,
+            path=config.mcp_path,
+            stateless_http=config.stateless_http,
+        )
     else:
         mcp.run()
 

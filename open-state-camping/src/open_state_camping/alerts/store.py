@@ -183,5 +183,20 @@ class AlertStore:
             )
 
 
+def build_store(backend: str, db_path: str) -> AlertStore:
+    """Select the alert storage backend.
+
+    This is the seam M2 hosting plugs a managed, encrypted-at-rest store into;
+    any backend must implement the AlertStore method surface (add, get, list_all,
+    list_active, delete, mark_checked, mark_fired). M1 ships only local SQLite.
+    """
+    if backend == "sqlite":
+        return AlertStore(db_path)
+    raise ValueError(
+        f"Unknown alert backend '{backend}'. M1 supports 'sqlite'; managed "
+        "backends arrive with M2 hosting."
+    )
+
+
 def _now() -> str:
     return _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds")
