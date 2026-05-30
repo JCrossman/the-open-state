@@ -28,6 +28,7 @@ from open_state_camping.config import Config
 from open_state_camping.providers.base import (
     AvailableSite,
     Campground,
+    CampgroundAvailability,
     CampingProvider,
     EquipmentType,
     RecreationArea,
@@ -205,6 +206,67 @@ class ParksCanadaProvider(CampingProvider):
             )
         sites.sort(key=lambda s: (not s.accessible, _name_sort_key(s.site_name)))
         return sites
+
+    def search_park_availability(
+        self,
+        *,
+        query: str,
+        start_date: _dt.date,
+        end_date: _dt.date,
+        party_size: int,
+        equipment_type: Optional[str] = None,
+        accessible_only: bool = False,
+        nights: Optional[int] = None,
+        weekends_only: bool = False,
+    ) -> list[CampgroundAvailability]:
+        """Search every campground matching ``query`` and summarize availability.
+
+        One call answers "anything open in Banff?" across all of that park's
+        campgrounds, so the assistant does not have to loop and cannot silently
+        miss one. A failure checking a single campground is captured on that row
+        (``error``) rather than aborting the whole search.
+        """
+        areas = self.search_parks(query)
+        campgrounds = areas[0].campgrounds if areas else ()
+        results: list[CampgroundAvailability] = []
+        for cg in campgrounds:
+            try:
+                sites = self.search_sites(
+                    recreation_area_id=cg.recreation_area_id,
+                    campground_id=cg.campground_id,
+                    start_date=start_date,
+                    end_date=end_date,
+                    party_size=party_size,
+                    equipment_type=equipment_type,
+                    accessible_only=accessible_only,
+                    nights=nights,
+                    weekends_only=weekends_only,
+                )
+                results.append(
+                    CampgroundAvailability(
+                        provider=self.name,
+                        recreation_area_id=cg.recreation_area_id,
+                        campground_id=cg.campground_id,
+                        campground_name=cg.name,
+                        open_site_count=len(sites),
+                        accessible_count=sum(1 for s in sites if s.accessible),
+                    )
+                )
+            except Exception as exc:  # noqa: BLE001 - one bad campground must not sink the search
+                results.append(
+                    CampgroundAvailability(
+                        provider=self.name,
+                        recreation_area_id=cg.recreation_area_id,
+                        campground_id=cg.campground_id,
+                        campground_name=cg.name,
+                        open_site_count=0,
+                        accessible_count=0,
+                        error=str(exc),
+                    )
+                )
+        # Most open sites first; campgrounds with nothing fall to the bottom.
+        results.sort(key=lambda r: (r.error is not None, -r.open_site_count))
+        return results
 
     def site_details(
         self,

@@ -297,6 +297,101 @@ def search_sites(
     return "\n".join(lines)
 
 
+@mcp.tool(
+    annotations=_readonly("Search a whole park for availability"),
+)
+def search_park_availability(
+    query: str,
+    start_date: _dt.date,
+    end_date: _dt.date,
+    party_size: int,
+    equipment_type: Optional[str] = None,
+    accessible_only: bool = False,
+    nights: Optional[int] = None,
+    weekends_only: bool = False,
+) -> str:
+    """Check every campground in a park at once and say which have openings.
+
+    Use this when a citizen names a place rather than one campground - for
+    example "anything open in Banff?" It searches all of that park's campgrounds
+    for the dates and party size in a single step and returns one consolidated
+    list, so nothing is missed. Then use `search_sites` on a campground that has
+    openings to see the individual sites, and `prepare_booking_url` to book.
+
+    `start_date` and `end_date` are arrival and departure. Set `accessible_only`
+    for sites Parks Canada marks accessible; `nights` / `weekends_only` work as in
+    `search_sites`. This tool never books.
+    """
+    try:
+        results = get_provider().search_park_availability(
+            query=query,
+            start_date=start_date,
+            end_date=end_date,
+            party_size=party_size,
+            equipment_type=equipment_type,
+            accessible_only=accessible_only,
+            nights=nights,
+            weekends_only=weekends_only,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return _problem(exc)
+
+    if not results:
+        return (
+            f'I could not find a Parks Canada park matching "{query}". Try a '
+            "national park name such as Banff, Jasper, or Pacific Rim."
+        )
+
+    stay = f"{start_date.isoformat()} to {end_date.isoformat()}"
+    acc = " (accessible sites only)" if accessible_only else ""
+    with_sites = [r for r in results if r.open_site_count > 0]
+    lines = [
+        f'Availability for "{query}", {stay}, party of {party_size}{acc}. '
+        + _INDEPENDENCE_NOTE,
+        "",
+    ]
+    if with_sites:
+        lines.append("Campgrounds with openings:")
+        for r in with_sites:
+            note = (
+                f", {r.accessible_count} marked accessible"
+                if r.accessible_count
+                else ""
+            )
+            lines.append(
+                f"- {r.campground_name}: {r.open_site_count} open site(s){note} "
+                f"(campground id: {r.campground_id})"
+            )
+        lines += [
+            "",
+            "Use search_sites with one of these campground ids to see the "
+            "individual sites, then prepare_booking_url to book in your own "
+            "Parks Canada session. This tool never books.",
+        ]
+    else:
+        lines.append(
+            "No campgrounds in that park have open sites for those dates. Sites "
+            "in popular parks fill quickly; you can ask me to watch a specific "
+            "campground and alert you if one opens up."
+        )
+
+    empty = [r for r in results if r.open_site_count == 0 and r.error is None]
+    if empty and with_sites:
+        lines.append("")
+        lines.append(
+            "No openings at: " + ", ".join(r.campground_name for r in empty) + "."
+        )
+    errored = [r for r in results if r.error is not None]
+    if errored:
+        lines.append("")
+        lines.append(
+            "I could not check: "
+            + ", ".join(r.campground_name for r in errored)
+            + ". You can try those individually with search_sites."
+        )
+    return "\n".join(lines)
+
+
 # A photo is ~90 KB; cap how many we ever fetch so a tool call stays light.
 _MAX_VIEWABLE_PHOTOS = 3
 

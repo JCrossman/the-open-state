@@ -174,6 +174,25 @@ def test_fetch_photo_rejects_offsite_urls(provider: ParksCanadaProvider):
     assert provider.fetch_photo("https://169.254.169.254/latest/meta-data") is None
 
 
+def test_search_park_availability_covers_all_matching_campgrounds(
+    provider: ParksCanadaProvider,
+):
+    results = provider.search_park_availability(
+        query="Banff", start_date=START, end_date=END, party_size=2
+    )
+    # Both Banff campgrounds in the fixture are checked in one call.
+    names = {r.campground_name for r in results}
+    assert "Banff - Tunnel Mountain Trailer Court" in names
+    assert "Banff - Two Jack Lakeside" in names
+    # The campground with fixture availability reports open sites.
+    main = next(r for r in results if r.campground_id == CAMPGROUND_ID)
+    assert main.open_site_count > 0
+    assert main.error is None
+    # Results are sorted with the most-open campgrounds first.
+    counts = [r.open_site_count for r in results if r.error is None]
+    assert counts == sorted(counts, reverse=True)
+
+
 def test_resource_is_accessible_reads_attribute_minus_32756():
     assert resource_is_accessible(
         {"definedAttributes": [{"attributeDefinitionId": -32756, "values": [0]}]}

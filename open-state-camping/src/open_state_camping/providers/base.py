@@ -128,6 +128,26 @@ class SiteDetails:
     site_type: Optional[str] = None
 
 
+@dataclass(frozen=True, slots=True)
+class CampgroundAvailability:
+    """How many open sites one campground has for a park-wide search.
+
+    Returned (one per campground) by ``search_park_availability`` so a citizen can
+    ask "anything in Banff?" and get a single consolidated answer instead of the
+    assistant looping over campgrounds itself. ``error`` is set when that one
+    campground could not be checked, so a single failure is visible without
+    sinking the whole search.
+    """
+
+    provider: str
+    recreation_area_id: str
+    campground_id: str
+    campground_name: str
+    open_site_count: int
+    accessible_count: int
+    error: Optional[str] = None
+
+
 class CampingProvider(ABC):
     """The interface every booking platform is wrapped behind.
 

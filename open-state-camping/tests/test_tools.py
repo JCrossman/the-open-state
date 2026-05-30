@@ -84,6 +84,26 @@ def test_search_sites_unknown_campground_is_friendly_not_raised(tools):
     assert "could not find" in out.lower()  # UpstreamError message, not a crash
 
 
+def test_search_park_availability_consolidates_campgrounds(tools):
+    out = tools.search_park_availability.fn(
+        query="Banff", start_date=START, end_date=END, party_size=2
+    )
+    # One consolidated answer, with the independence disclaimer and a campground id
+    # the citizen can hand to search_sites next.
+    assert "not operated by or endorsed by Parks Canada" in out
+    assert "campground id:" in out
+    assert "open site(s)" in out
+    # Steers to the per-campground search and stays prepare-only.
+    assert "search_sites" in out and "never books" in out.lower()
+
+
+def test_search_park_availability_unknown_park_is_friendly(tools):
+    out = tools.search_park_availability.fn(
+        query="Narnia", start_date=START, end_date=END, party_size=2
+    )
+    assert "could not find" in out.lower()
+
+
 def test_get_site_details(tools):
     out = tools.get_site_details.fn(campground_id=CAMPGROUND_ID, campsite_id=SITE_104)
     assert "accessible" in out.lower()
