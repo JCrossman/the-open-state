@@ -31,10 +31,15 @@ param rateLimitRps string = '3'
 @description('Burst capacity for the global rate limit.')
 param rateLimitBurst string = '10'
 
-@description('Max replicas. Min is fixed at 0 so the preview scales to zero when idle.')
+@description('Max replicas the app can scale out to under load.')
 @minValue(1)
 @maxValue(10)
 param maxReplicas int = 3
+
+@description('Min replicas. 1 keeps a warm replica (no cold start, and the in-process alert poller runs continuously); 0 scales to zero when idle for the lowest cost.')
+@minValue(0)
+@maxValue(10)
+param minReplicas int = 1
 
 var uniqueSuffix = uniqueString(resourceGroup().id)
 var acrName = toLower('${namePrefix}acr${uniqueSuffix}')
@@ -177,9 +182,10 @@ resource containerApp 'Microsoft.App/containerApps@2025-01-01' = {
         }
       ]
       scale: {
-        // Scale to zero: with the poller off there is nothing to keep warm, so
-        // an idle preview costs (almost) nothing. A request cold-starts it.
-        minReplicas: 0
+        // A warm replica (minReplicas: 1) avoids cold starts and lets the
+        // in-process alert poller run continuously. Set minReplicas to 0 to
+        // scale to zero for the lowest cost, at the expense of both.
+        minReplicas: minReplicas
         maxReplicas: maxReplicas
         rules: [
           {
