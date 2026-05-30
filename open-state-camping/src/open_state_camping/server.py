@@ -30,7 +30,7 @@ from typing import Optional
 from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, PlainTextResponse
 
 from open_state_camping.alerts import AlertPoller, AlertStore, build_store
 from open_state_camping.config import Config
@@ -48,9 +48,13 @@ logger = logging.getLogger(__name__)
 async def _lifespan(_app: FastMCP):
     """Run the alert poller in the background for the life of the server.
 
-    M2 moves this into the ASGI lifespan of the hosted app; for M1 (stdio) the
-    poller runs while the citizen's assistant session is open.
+    Hosted (M2) this is the ASGI lifespan; local (stdio) the poller runs while the
+    citizen's assistant session is open. In the read-only preview (alerts
+    disabled) there are no watches, so the poller does not run at all.
     """
+    if not Config.from_env().enable_alerts:
+        yield
+        return
     poller = AlertPoller(get_store(), _resolve_provider, Config.from_env())
     task = asyncio.create_task(poller.run())
     try:
@@ -64,13 +68,31 @@ async def _lifespan(_app: FastMCP):
             pass
 
 
-mcp = FastMCP("Open State: Camping", lifespan=_lifespan)
+# In the read-only preview, hide the alert tools by tag (they assume a single
+# trusted user; they return scoped behind auth - docs/m2-validation-findings.md).
+mcp = FastMCP(
+    "Open State: Camping",
+    lifespan=_lifespan,
+    exclude_tags=None if Config.from_env().enable_alerts else {"alerts"},
+)
 
 
 @mcp.custom_route("/health", methods=["GET"])
 async def health(_request: Request) -> JSONResponse:
     """Liveness probe, separate from /mcp and unauthenticated (M2 hosting)."""
     return JSONResponse({"status": "ok", "service": "open-state-camping"})
+
+
+@mcp.custom_route("/", methods=["GET"])
+async def root(_request: Request) -> PlainTextResponse:
+    """Friendly note for a human who opens the public URL in a browser."""
+    return PlainTextResponse(
+        "The Open State: Camping - an independent, public-interest tool for "
+        "searching Parks Canada campsite availability through your own AI "
+        "assistant. It is not operated by or endorsed by Parks Canada.\n\n"
+        "This is a Model Context Protocol (MCP) server. Connect an MCP client to "
+        "the /mcp endpoint. Health: /health\n"
+    )
 
 _INDEPENDENCE_NOTE = (
     "The Open State is an independent public-interest tool. It is not operated by "
@@ -358,6 +380,7 @@ def prepare_booking_url(
 
 
 @mcp.tool(
+    tags={"alerts"},
     annotations=ToolAnnotations(
         title="Set a cancellation alert",
         readOnlyHint=False,
@@ -481,6 +504,7 @@ def create_alert(
 
 
 @mcp.tool(
+    tags={"alerts"},
     annotations=ToolAnnotations(title="List your cancellation alerts", readOnlyHint=True),
 )
 def list_alerts() -> str:
@@ -512,6 +536,7 @@ def list_alerts() -> str:
 
 
 @mcp.tool(
+    tags={"alerts"},
     annotations=ToolAnnotations(
         title="Delete a cancellation alert",
         readOnlyHint=False,
@@ -534,7 +559,20 @@ def main() -> None:
     """Run the MCP server. Defaults to stdio (M1); HTTP is selected via env (M2+)."""
     config = Config.from_env()
     if config.transport == "http":
-        # Streamable HTTP at /mcp; /health is served alongside for probes.
+        # Global rate limit for upstream politeness (Art. 7.3). global_limit=True
+        # is a single shared bucket - right here because all Claude traffic
+        # arrives from one IP range, so per-client limiting would not bite.
+        if config.rate_limit_rps > 0:
+            from fastmcp.server.middleware.rate_limiting import RateLimitingMiddleware
+
+            mcp.add_middleware(
+                RateLimitingMiddleware(
+                    max_requests_per_second=config.rate_limit_rps,
+                    burst_capacity=config.rate_limit_burst,
+                    global_limit=True,
+                )
+            )
+        # Streamable HTTP at /mcp; /health and / are served alongside for probes.
         # stateless_http keeps multi-replica hosting (M2) from breaking sessions.
         mcp.run(
             transport="http",

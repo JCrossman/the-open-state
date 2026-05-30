@@ -54,6 +54,16 @@ class Config:
     # Alert storage backend. "sqlite" is the local M1 default; managed backends
     # arrive with M2 and implement the same AlertStore method surface.
     alert_backend: str = "sqlite"
+    # Read-only preview switch. When False, the alert tools (create/list/delete)
+    # are not exposed and the poller does not run - used for an unauthenticated
+    # public preview of the public-data, prepare-only tools (docs/m2-validation-
+    # findings.md, decision 2). Alerts return when they are scoped behind auth.
+    enable_alerts: bool = True
+    # Global request rate limit for HTTP serving (upstream politeness, Art. 7.3).
+    # All Claude traffic shares Anthropic's IP range, so the limit is global, not
+    # per-client. <= 0 disables. Applied only under the http transport.
+    rate_limit_rps: float = 5.0
+    rate_limit_burst: int = 20
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -74,6 +84,9 @@ class Config:
             mcp_path=os.getenv("OPEN_STATE_MCP_PATH", "/mcp"),
             stateless_http=_env_bool("OPEN_STATE_STATELESS_HTTP", True),
             alert_backend=os.getenv("OPEN_STATE_ALERT_BACKEND", "sqlite"),
+            enable_alerts=_env_bool("OPEN_STATE_ENABLE_ALERTS", True),
+            rate_limit_rps=float(os.getenv("OPEN_STATE_RATE_LIMIT_RPS", "5")),
+            rate_limit_burst=int(os.getenv("OPEN_STATE_RATE_LIMIT_BURST", "20")),
         )
 
 
