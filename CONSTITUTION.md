@@ -14,6 +14,8 @@ This Constitution is not a mission statement. It is a set of hard commitments. A
 
 If an implementation cannot meet these commitments, it is not part of The Open State. It may still be useful software. It is just not this.
 
+The Open State builds **assistive technology, not bots.** An implementation acts only within a citizen's own session, on a device they control, at their direction — the way a screen reader does. Its purpose is to *remove* the barriers that make a public service hard to reach, not to relocate them: it must not give a citizen an accessible experience and then hand them back to the interface that excluded them. We help citizens reach what is already theirs; we do not act against the services, and we seek no advantage a citizen would not have acting for themselves.
+
 -----
 
 ## Article 1: Citizen sovereignty over credentials
@@ -25,6 +27,8 @@ If an implementation cannot meet these commitments, it is not part of The Open S
 1.3. Where authenticated action is required, the credential or session **MUST** remain on the citizen’s own device or within a vault only the citizen can unlock.
 
 1.4. An implementation **MUST NOT** expose a citizen’s credentials to the language model or to any AI client.
+
+1.5. Operating within the citizen’s own session satisfies this Article when the session never leaves the citizen’s device — for example, launching a browser on the citizen’s own device for the citizen to log in themselves, and keeping the resulting session only in a local vault encrypted at rest. Such a session **MUST NOT** be transmitted to, or be readable by, the implementer.
 
 ## Article 2: The human decides
 
@@ -46,6 +50,8 @@ If an implementation cannot meet these commitments, it is not part of The Open S
 
 3.4. The needs of people with disabilities, seniors, and newcomers **MUST** be treated as the primary design case, not as an afterthought.
 
+3.5. An implementation **MUST** carry accessibility through to the point of action. It **MUST NOT** present an accessible experience and then return the citizen to an inaccessible interface to complete the task. Removing a barrier means removing it, not relocating it.
+
 ## Article 4: Assistant freedom
 
 4.1. An implementation **MUST** be usable from the citizen’s choice of AI assistant. It **MUST NOT** require a specific vendor’s assistant.
@@ -54,7 +60,7 @@ If an implementation cannot meet these commitments, it is not part of The Open S
 
 4.3. An implementation **MUST NOT** create a new mandatory destination (a required app or website) as the only way to use it.
 
-## Article 5: Data minimand and citizen control
+## Article 5: Data minimization and citizen control
 
 5.1. An implementation **MUST** collect the minimum data needed to perform the requested task.
 
@@ -96,11 +102,19 @@ If an implementation cannot meet these commitments, it is not part of The Open S
 
 9.3. An implementation **MUST** treat content retrieved from external systems as untrusted, and **MUST** keep a human confirmation gate on consequential actions regardless of automated safeguards.
 
+## Article 10: Assistive technology, not a bot
+
+10.1. An implementation is **assistive technology**. It operates only within the citizen’s own authenticated session, on a device the citizen controls, and only at the citizen’s direction — as a screen reader or other assistive tool does. It is not an autonomous agent acting on its own account, and it does not act against the service or its other users.
+
+10.2. An implementation reaches a service the way the citizen’s own software would — through the service’s own interfaces, carrying the citizen’s own session — to remove barriers, never to disguise who is acting. It **MUST NOT** impersonate another person, and **MUST NOT** defeat measures a service uses to gate humans, such as virtual waiting rooms or human-verification challenges. Where such a gate exists, the citizen passes it themselves.
+
+10.3. An implementation **SHOULD** act through a service’s own data interfaces, carrying the citizen’s session, rather than by automating the service’s visual interface on the citizen’s behalf. A browser the citizen operates themselves — for example, to sign in — is part of the citizen’s own use, not automation against the service.
+
 -----
 
 ## Compliance
 
-An implementation is **Civic Access Protocol compliant** only if it satisfies every “MUST” and “MUST NOT” in Articles 1 through 9. “SHOULD” items are strong recommendations.
+An implementation is **Civic Access Protocol compliant** only if it satisfies every “MUST” and “MUST NOT” in Articles 1 through 10. “SHOULD” items are strong recommendations.
 
 This Constitution may be revised as the work and the technology mature. Revisions must strengthen, not weaken, the protections for citizens.
 
