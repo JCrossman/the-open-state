@@ -1,0 +1,27 @@
+{
+  "manifest_version": "0.3",
+  "name": "open-state-camping",
+  "display_name": "The Open State: Camping",
+  "version": "0.1.0",
+  "description": "Find and (soon) book Parks Canada campsites in plain language, accessibly — from your own machine.",
+  "long_description": "An independent, public-interest assistive tool. It searches Parks Canada campsite availability in plain language, puts accessibility first, and runs entirely on your own device so your searches come from your own connection. It is not operated by or endorsed by Parks Canada. It never stores your government login and never books on its own — you confirm everything yourself.",
+  "author": {
+    "name": "The Open State"
+  },
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.mjs",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/index.mjs"]
+    }
+  },
+  "tools": [
+    { "name": "search_parks", "description": "Find Parks Canada campgrounds by a plain-language place name." },
+    { "name": "list_equipment_types", "description": "List equipment types you can filter sites by (tent, RV, ...)." },
+    { "name": "search_sites", "description": "Find open campsites in a campground for a stay, accessibility first." },
+    { "name": "search_park_availability", "description": "Check every campground in a park at once and say which have openings." },
+    { "name": "get_site_details", "description": "Plain-language detail about one campsite, including accessibility and photos." },
+    { "name": "prepare_booking_url", "description": "Prepare a Parks Canada booking link you open and confirm yourself." }
+  ]
+}

@@ -2,6 +2,10 @@
 node_modules/
 *.tsbuildinfo
 
+# .mcpb build staging + packaged bundles (build artifacts)
+.mcpb-build/
+*.mcpb
+
 # Local encrypted session vault (never commit citizen session material)
 .open-state-camping/
 
