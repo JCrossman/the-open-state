@@ -6,7 +6,7 @@
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { ParksCanadaProvider } from "@open-state/core";
+import { ParksCanadaProvider, windowNights } from "@open-state/core";
 import type { BundleConfig } from "./config.js";
 import * as fmt from "./format.js";
 
@@ -19,6 +19,33 @@ const text = (s: string): TextResult => ({ content: [{ type: "text", text: s }] 
 
 function stay(start: string, end: string): string {
   return `${start} to ${end}`;
+}
+
+/** Longest stay we treat as an exact "every night" search; longer ⇒ likely a range. */
+const MAX_EXACT_STAY_NIGHTS = 14;
+
+/**
+ * Guard the misleading "fully booked" case: an exact-stay search (no `nights`)
+ * over a long span almost never matches, because a site must be open every
+ * single night. Rather than report a false "no availability", ask how long a
+ * stay they want — then the range is searched for an opening (Constitution
+ * Art. 7.1: flag, don't guess). Returns a clarification, or null if fine.
+ */
+export function flexibleRangeHint(
+  start: string,
+  end: string,
+  nights?: number | null,
+): string | null {
+  if (nights != null) return null;
+  const span = windowNights(start, end).length;
+  if (span <= MAX_EXACT_STAY_NIGHTS) return null;
+  return (
+    `That search is for a single stay covering every night from ${start} to ${end} ` +
+    `— ${span} nights — so almost nothing will show as available (few sites are open ` +
+    `that whole stretch). If you want a flexible stay, tell me how many nights you'd ` +
+    `like (for example 2 or 3) and I'll find openings anywhere in that range. If you ` +
+    `really do want all ${span} nights, let me know and I'll search that exact stay.`
+  );
 }
 
 export function registerTools(
@@ -76,7 +103,10 @@ export function registerTools(
       description:
         "Find open campsites in a campground for a stay, accessibility first. " +
         "Use after search_parks gives you a campground id. start_date and " +
-        "end_date are arrival and departure. Set accessible_only for sites " +
+        "end_date are an EXACT stay — a site must be open every night between " +
+        "them. For a flexible search across a wide range (e.g. \"anything in " +
+        "June\"), also pass nights = how many nights you want, and openings " +
+        "anywhere in the range are returned. Set accessible_only for sites " +
         "Parks Canada marks accessible. equipment_type takes a word like " +
         '"tent" or "RV", or an equipment id from list_equipment_types.',
       inputSchema: {
@@ -94,6 +124,8 @@ export function registerTools(
     },
     async (args) => {
       try {
+        const hint = flexibleRangeHint(args.start_date, args.end_date, args.nights ?? null);
+        if (hint) return text(hint);
         const sites = await provider.searchSites({
           recreationAreaId: args.recreation_area_id ?? recArea,
           campgroundId: args.campground_id,
@@ -124,8 +156,11 @@ export function registerTools(
       title: "Search a whole park for availability",
       description:
         'Check every campground in a park at once ("anything open in ' +
-        'Banff?") and return one consolidated list. Then use search_sites on ' +
-        "a campground that has openings. equipment_type takes a word or an id.",
+        'Banff?") and return one consolidated list. start_date/end_date are an ' +
+        "EXACT stay (open every night); for a flexible search over a wide range, " +
+        "also pass nights = desired stay length and openings anywhere in the " +
+        "range are returned. Then use search_sites on a campground that has " +
+        "openings. equipment_type takes a word or an id.",
       inputSchema: {
         query: z.string(),
         start_date: isoDate,
@@ -140,6 +175,8 @@ export function registerTools(
     },
     async (args) => {
       try {
+        const hint = flexibleRangeHint(args.start_date, args.end_date, args.nights ?? null);
+        if (hint) return text(hint);
         const results = await provider.searchParkAvailability({
           query: args.query,
           startDate: args.start_date,

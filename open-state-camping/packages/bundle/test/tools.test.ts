@@ -5,6 +5,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { GoingToCampClient, ParksCanadaProvider, type FetchLike } from "@open-state/core";
 import { createServerForProvider } from "../src/server.js";
+import { flexibleRangeHint } from "../src/tools.js";
 
 const CAMPGROUND_ID = "-2147483644";
 const ROOT_MAP_ID = "-2147483626";
@@ -161,5 +162,45 @@ describe("bundle MCP server", () => {
     });
     expect(out).toContain("create-booking/results");
     expect(out).toMatch(/never books or pays/i);
+  });
+});
+
+describe("wide-date-range guard", () => {
+  it("flags a long exact-stay search instead of a false 'no availability'", () => {
+    const hint = flexibleRangeHint("2026-06-01", "2026-07-01");
+    expect(hint).toBeTruthy();
+    expect(hint).toMatch(/how many nights/i);
+  });
+
+  it("does not flag a normal short stay", () => {
+    expect(flexibleRangeHint("2026-06-09", "2026-06-11")).toBeNull();
+  });
+
+  it("does not flag when a stay length is given", () => {
+    expect(flexibleRangeHint("2026-06-01", "2026-07-01", 2)).toBeNull();
+  });
+
+  it("a wide park search without nights asks for a stay length, not 'fully booked'", async () => {
+    const out = await callText(await connectClient(), "search_park_availability", {
+      query: "Banff",
+      start_date: "2026-06-01",
+      end_date: "2026-07-01",
+      party_size: 2,
+    });
+    expect(out).toMatch(/how many nights/i);
+    expect(out).not.toMatch(/no campgrounds/i);
+    expect(out).not.toContain("Availability for");
+  });
+
+  it("a wide park search WITH nights runs the search", async () => {
+    const out = await callText(await connectClient(), "search_park_availability", {
+      query: "Banff",
+      start_date: "2026-06-01",
+      end_date: "2026-07-01",
+      party_size: 2,
+      nights: 2,
+    });
+    expect(out).toContain("Availability for");
+    expect(out).not.toMatch(/how many nights/i);
   });
 });
