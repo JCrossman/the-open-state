@@ -1,0 +1,79 @@
+{
+ "mapId": -2147483625,
+ "mapAvailabilities": [
+  1
+ ],
+ "resourceAvailabilities": {
+  "-2147475789": [
+   {
+    "availability": 0,
+    "remainingQuota": null
+   },
+   {
+    "availability": 0,
+    "remainingQuota": null
+   },
+   {
+    "availability": 0,
+    "remainingQuota": null
+   }
+  ],
+  "-2147475943": [
+   {
+    "availability": 0,
+    "remainingQuota": null
+   },
+   {
+    "availability": 0,
+    "remainingQuota": null
+   },
+   {
+    "availability": 0,
+    "remainingQuota": null
+   }
+  ],
+  "-2147475657": [
+   {
+    "availability": 0,
+    "remainingQuota": null
+   },
+   {
+    "availability": 1,
+    "remainingQuota": null
+   },
+   {
+    "availability": 0,
+    "remainingQuota": null
+   }
+  ],
+  "-2147475825": [
+   {
+    "availability": 1,
+    "remainingQuota": null
+   },
+   {
+    "availability": 1,
+    "remainingQuota": null
+   },
+   {
+    "availability": 1,
+    "remainingQuota": null
+   }
+  ],
+  "-2147475635": [
+   {
+    "availability": 1,
+    "remainingQuota": null
+   },
+   {
+    "availability": 1,
+    "remainingQuota": null
+   },
+   {
+    "availability": 1,
+    "remainingQuota": null
+   }
+  ]
+ },
+ "mapLinkAvailabilities": {}
+}

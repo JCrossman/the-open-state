@@ -1,3 +1,10 @@
+# Node / pnpm
+node_modules/
+*.tsbuildinfo
+
+# Local encrypted session vault (never commit citizen session material)
+.open-state-camping/
+
 # Python / uv
 .venv/
 __pycache__/
