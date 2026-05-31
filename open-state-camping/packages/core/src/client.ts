@@ -182,6 +182,16 @@ export class GoingToCampClient {
   }
 
   /**
+   * The signed-in citizen's account info (authenticated). Returns the JSON when
+   * connected, or null when the call is unauthenticated/empty. Used to verify a
+   * captured session is live.
+   */
+  async getUserInfo(): Promise<Record<string, any> | null> {
+    const data = (await this.get("/api/account/userInfo")) as unknown;
+    return data && typeof data === "object" ? (data as Record<string, any>) : null;
+  }
+
+  /**
    * Per-day availability for each site over the stay window. Walks the
    * campground's map tree (root → child maps); one request per map, never more
    * than the loop guard. Read-only.

@@ -275,6 +275,11 @@ export class ParksCanadaProvider {
     return this.client.fetchImage(url);
   }
 
+  /** The signed-in citizen's account info, to verify a captured session. */
+  getUserInfo(): Promise<Record<string, any> | null> {
+    return this.client.getUserInfo();
+  }
+
   async bookingUrl(opts: {
     campgroundId: string;
     startDate: ISODate;

@@ -12,6 +12,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { ParksCanadaProvider } from "@open-state/core";
 import { configFromEnv } from "./config.js";
 import { registerTools } from "./tools.js";
+import { registerAccountTools } from "./account-tools.js";
+import { loadSession, sessionAuthHeaders } from "./session/vault.js";
 
 import type { BundleConfig } from "./config.js";
 
@@ -30,11 +32,19 @@ export function createServerForProvider(
 
 export function createServer(): McpServer {
   const config = configFromEnv();
+  // Replay the citizen's captured session (when connected) on every API call,
+  // read fresh each time so connect/disconnect take effect immediately.
   const provider = new ParksCanadaProvider({
     userAgent: config.userAgent,
     timeoutMs: config.timeoutMs,
+    authHeaders: () => {
+      const session = loadSession();
+      return session ? sessionAuthHeaders(session) : undefined;
+    },
   });
-  return createServerForProvider(provider, config);
+  const server = createServerForProvider(provider, config);
+  registerAccountTools(server, provider);
+  return server;
 }
 
 async function main(): Promise<void> {
