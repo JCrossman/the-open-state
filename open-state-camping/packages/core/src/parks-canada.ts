@@ -72,6 +72,7 @@ export class ParksCanadaProvider {
       userAgent?: string;
       timeoutMs?: number;
       fetchFn?: FetchLike;
+      cookieProvider?: () => string | undefined;
     } = {},
   ) {
     this.client =
@@ -81,6 +82,7 @@ export class ParksCanadaProvider {
         userAgent: opts.userAgent,
         timeoutMs: opts.timeoutMs,
         fetchFn: opts.fetchFn,
+        cookieProvider: opts.cookieProvider,
       });
   }
 

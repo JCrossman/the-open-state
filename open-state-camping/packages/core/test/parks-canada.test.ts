@@ -208,3 +208,35 @@ describe("availability helpers", () => {
     ]);
   });
 });
+
+describe("authenticated requests", () => {
+  function recordingClient(cookieProvider?: () => string | undefined) {
+    const seen: { headers?: Record<string, string> } = {};
+    const fetchFn = (async (_input: unknown, init: RequestInit | undefined) => {
+      seen.headers = Object.fromEntries(new Headers(init?.headers).entries());
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as FetchLike;
+    const client = new GoingToCampClient({
+      hostname: "reservation.pc.gc.ca",
+      userAgent: "test",
+      fetchFn,
+      cookieProvider,
+    });
+    return { client, seen };
+  }
+
+  it("sends the citizen's cookie when connected", async () => {
+    const { client, seen } = recordingClient(() => "SID=abc; queue-it=xyz");
+    await client.listCampgrounds();
+    expect(seen.headers?.["cookie"]).toBe("SID=abc; queue-it=xyz");
+  });
+
+  it("omits the cookie header when not connected", async () => {
+    const { client, seen } = recordingClient();
+    await client.listCampgrounds();
+    expect(seen.headers?.["cookie"]).toBeUndefined();
+  });
+});

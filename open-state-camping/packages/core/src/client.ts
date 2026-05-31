@@ -39,22 +39,36 @@ export class GoingToCampClient {
   private readonly headers: Record<string, string>;
   private readonly timeoutMs: number;
   private readonly fetchFn: FetchLike;
+  /**
+   * Returns the citizen's current `Cookie:` header, or undefined when not
+   * connected. Read per-request so a session captured after construction takes
+   * effect immediately. The cookie never leaves this client (Constitution 1.5).
+   */
+  private readonly cookieProvider?: () => string | undefined;
 
   constructor(opts: {
     hostname: string;
     userAgent?: string;
     timeoutMs?: number;
     fetchFn?: FetchLike;
+    cookieProvider?: () => string | undefined;
   }) {
     this.base = `https://${opts.hostname}`;
     this.timeoutMs = opts.timeoutMs ?? 30_000;
     this.fetchFn = opts.fetchFn ?? fetch;
+    this.cookieProvider = opts.cookieProvider;
     this.headers = {
       "User-Agent": opts.userAgent ?? DEFAULT_USER_AGENT,
       Accept: "application/json, text/plain, */*",
       "Accept-Language": "en-CA,en;q=0.9",
       Referer: `${this.base}/`,
     };
+  }
+
+  /** Per-request headers, adding the citizen's session cookie when connected. */
+  private requestHeaders(): Record<string, string> {
+    const cookie = this.cookieProvider?.();
+    return cookie ? { ...this.headers, Cookie: cookie } : this.headers;
   }
 
   // -- low-level ------------------------------------------------------------
@@ -72,7 +86,7 @@ export class GoingToCampClient {
     let resp: Response;
     try {
       resp = await this.fetchFn(url.toString(), {
-        headers: this.headers,
+        headers: this.requestHeaders(),
         redirect: "follow",
         signal: AbortSignal.timeout(this.timeoutMs),
       });
@@ -246,7 +260,7 @@ export class GoingToCampClient {
     let resp: Response;
     try {
       resp = await this.fetchFn(url, {
-        headers: this.headers,
+        headers: this.requestHeaders(),
         signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch {
