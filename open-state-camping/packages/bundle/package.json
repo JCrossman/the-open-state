@@ -1,0 +1,28 @@
+{
+  "name": "@open-state/bundle",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The Open State: Camping - local MCP bundle (.mcpb): anonymous search + booking completion for Parks Canada.",
+  "bin": {
+    "open-state-camping": "./dist/server.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "start": "node dist/server.js",
+    "dev": "tsx src/server.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@open-state/core": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
+  }
+}

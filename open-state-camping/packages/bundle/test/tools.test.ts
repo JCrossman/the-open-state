@@ -1,0 +1,165 @@
+import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { GoingToCampClient, ParksCanadaProvider, type FetchLike } from "@open-state/core";
+import { createServerForProvider } from "../src/server.js";
+
+const CAMPGROUND_ID = "-2147483644";
+const ROOT_MAP_ID = "-2147483626";
+const START = "2026-07-17";
+const END = "2026-07-19";
+
+// Fixtures live in the core package (same recorded API responses).
+function fixture(name: string): unknown {
+  const url = new URL(`../../core/test/fixtures/${name}`, import.meta.url);
+  return JSON.parse(readFileSync(fileURLToPath(url), "utf8"));
+}
+
+function fixtureFetch(): FetchLike {
+  return (async (input: string | URL | Request) => {
+    const u = new URL(typeof input === "string" ? input : input.toString());
+    let data: unknown;
+    switch (u.pathname) {
+      case "/api/resourceLocation":
+        data = fixture("resourceLocation_min.json");
+        break;
+      case "/api/equipment":
+        data = fixture("equipment.json");
+        break;
+      case "/api/resourcelocation/resources":
+        data = fixture("resources_min.json");
+        break;
+      case "/api/attribute/filterable":
+        data = fixture("attribute_filterable_min.json");
+        break;
+      case "/api/availability/map":
+        data =
+          u.searchParams.get("mapId") === ROOT_MAP_ID
+            ? fixture("availability_root.json")
+            : fixture("availability_child.json");
+        break;
+      default:
+        return new Response(JSON.stringify({ error: u.pathname }), { status: 404 });
+    }
+    return new Response(JSON.stringify(data), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as FetchLike;
+}
+
+async function connectClient(): Promise<Client> {
+  const provider = new ParksCanadaProvider({
+    client: new GoingToCampClient({
+      hostname: "reservation.pc.gc.ca",
+      userAgent: "test",
+      fetchFn: fixtureFetch(),
+    }),
+  });
+  const server = createServerForProvider(provider, {
+    recreationAreaId: "14",
+    timeoutMs: 30_000,
+  });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  await server.connect(serverTransport);
+  const client = new Client({ name: "test", version: "0.0.0" });
+  await client.connect(clientTransport);
+  return client;
+}
+
+async function callText(
+  client: Client,
+  name: string,
+  args: Record<string, unknown>,
+): Promise<string> {
+  const res = (await client.callTool({ name, arguments: args })) as {
+    content: Array<{ type: string; text?: string }>;
+  };
+  return res.content
+    .filter((c) => c.type === "text")
+    .map((c) => c.text)
+    .join("\n");
+}
+
+describe("bundle MCP server", () => {
+  it("exposes the six read tools", async () => {
+    const client = await connectClient();
+    const tools = (await client.listTools()).tools.map((t) => t.name).sort();
+    expect(tools).toEqual(
+      [
+        "get_site_details",
+        "list_equipment_types",
+        "prepare_booking_url",
+        "search_park_availability",
+        "search_parks",
+        "search_sites",
+      ].sort(),
+    );
+  });
+
+  it("search_parks returns campground ids and the independence disclosure", async () => {
+    const out = await callText(await connectClient(), "search_parks", { query: "Banff" });
+    expect(out).toContain("campground id:");
+    expect(out).toContain("not operated by or endorsed by Parks Canada");
+  });
+
+  it("search_sites surfaces accessibility and stays prepare-only", async () => {
+    const out = await callText(await connectClient(), "search_sites", {
+      campground_id: CAMPGROUND_ID,
+      start_date: START,
+      end_date: END,
+      party_size: 2,
+    });
+    expect(out).toContain("marked accessible");
+    expect(out).toMatch(/never books or pays/i);
+  });
+
+  it("search_park_availability consolidates and coerces ISO dates", async () => {
+    const out = await callText(await connectClient(), "search_park_availability", {
+      query: "Banff",
+      start_date: START,
+      end_date: END,
+      party_size: 2,
+    });
+    expect(out).toContain("Availability for");
+    expect(out).toContain("campground id:");
+  });
+
+  it("an ambiguous equipment word is flagged, not masked", async () => {
+    const out = await callText(await connectClient(), "search_park_availability", {
+      query: "Banff",
+      start_date: START,
+      end_date: END,
+      party_size: 2,
+      equipment_type: "tent",
+    });
+    expect(out).toContain("-32768");
+    expect(out).not.toContain("could not check");
+  });
+
+  it("prepare_booking_url asks for equipment when missing", async () => {
+    const out = await callText(await connectClient(), "prepare_booking_url", {
+      campground_id: CAMPGROUND_ID,
+      campsite_id: "-2147475789",
+      start_date: START,
+      end_date: END,
+      party_size: 2,
+    });
+    expect(out).toContain("equipment id:");
+  });
+
+  it("prepare_booking_url returns a deep link for a valid equipment id", async () => {
+    const out = await callText(await connectClient(), "prepare_booking_url", {
+      campground_id: CAMPGROUND_ID,
+      campsite_id: "-2147475789",
+      start_date: START,
+      end_date: END,
+      party_size: 2,
+      equipment_type: "-32768",
+    });
+    expect(out).toContain("create-booking/results");
+    expect(out).toMatch(/never books or pays/i);
+  });
+});
