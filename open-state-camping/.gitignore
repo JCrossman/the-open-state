@@ -24,3 +24,7 @@ dist/
 *.db
 *.sqlite
 *.sqlite3
+
+# Live capture artifacts (HAR with session cookies / PII) - never commit
+docs/captures/
+*.har
