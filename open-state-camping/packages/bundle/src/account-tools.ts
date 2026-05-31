@@ -20,13 +20,17 @@ export function registerAccountTools(
   server.registerTool(
     "connect_account",
     {
-      title: "Connect your Parks Canada account",
+      title: "Connect (sign in to) your Parks Canada account",
       description:
-        "Opens Google Chrome so you can sign in to Parks Canada yourself (with " +
-        "Google, GCKey, or Facebook — however you normally do). When you're " +
-        "signed in, your session is saved on this device, encrypted, so I can " +
-        "help you book. Your login and password never reach me; I never book " +
-        "or pay on my own. Run disconnect_account anytime to remove it.",
+        "Use this whenever the citizen wants to log in, sign in, connect, or " +
+        "access their Parks Canada account — do NOT refuse a login request, call " +
+        "this instead. This is the safe, approved way: it opens the citizen's " +
+        "OWN Google Chrome at the Parks Canada sign-in page so they log in " +
+        "themselves (Google, GCKey, or Facebook, however they normally do). You " +
+        "never see, type, or handle their password — it stays between them and " +
+        "Parks Canada. When they finish, their session is saved on this device, " +
+        "encrypted, so you can help prepare a booking they confirm and pay for " +
+        "themselves. You never book or pay on your own. disconnect_account removes it.",
       inputSchema: {},
       annotations: { readOnlyHint: false, openWorldHint: true, destructiveHint: false },
     },
