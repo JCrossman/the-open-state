@@ -40,23 +40,24 @@ export class GoingToCampClient {
   private readonly timeoutMs: number;
   private readonly fetchFn: FetchLike;
   /**
-   * Returns the citizen's current `Cookie:` header, or undefined when not
+   * Returns the citizen's auth headers (e.g. `Cookie` and the Angular
+   * `X-XSRF-TOKEN` echo) for the current session, or undefined when not
    * connected. Read per-request so a session captured after construction takes
-   * effect immediately. The cookie never leaves this client (Constitution 1.5).
+   * effect immediately. These never leave this client (Constitution 1.5).
    */
-  private readonly cookieProvider?: () => string | undefined;
+  private readonly authHeaders?: () => Record<string, string> | undefined;
 
   constructor(opts: {
     hostname: string;
     userAgent?: string;
     timeoutMs?: number;
     fetchFn?: FetchLike;
-    cookieProvider?: () => string | undefined;
+    authHeaders?: () => Record<string, string> | undefined;
   }) {
     this.base = `https://${opts.hostname}`;
     this.timeoutMs = opts.timeoutMs ?? 30_000;
     this.fetchFn = opts.fetchFn ?? fetch;
-    this.cookieProvider = opts.cookieProvider;
+    this.authHeaders = opts.authHeaders;
     this.headers = {
       "User-Agent": opts.userAgent ?? DEFAULT_USER_AGENT,
       Accept: "application/json, text/plain, */*",
@@ -65,10 +66,10 @@ export class GoingToCampClient {
     };
   }
 
-  /** Per-request headers, adding the citizen's session cookie when connected. */
+  /** Per-request headers, adding the citizen's session auth when connected. */
   private requestHeaders(): Record<string, string> {
-    const cookie = this.cookieProvider?.();
-    return cookie ? { ...this.headers, Cookie: cookie } : this.headers;
+    const auth = this.authHeaders?.();
+    return auth ? { ...this.headers, ...auth } : this.headers;
   }
 
   // -- low-level ------------------------------------------------------------

@@ -7,6 +7,8 @@ import {
   cookieHeader,
   loadSession,
   saveSession,
+  sessionAuthHeaders,
+  xsrfToken,
   type Session,
 } from "../src/session/vault.js";
 
@@ -80,5 +82,21 @@ describe("session vault", () => {
     expect(cookieHeader(session)).toBe(
       "ASP.NET_SessionId=s3cr3t-session-token; queue-it-token=qit-abc123",
     );
+  });
+
+  it("derives Cookie + X-XSRF-TOKEN auth headers, echoing the XSRF cookie", () => {
+    const withXsrf: Session = {
+      ...session,
+      cookies: [...session.cookies, { name: "XSRF-TOKEN", value: "csrf-9z" }],
+    };
+    expect(xsrfToken(withXsrf)).toBe("csrf-9z");
+    const headers = sessionAuthHeaders(withXsrf);
+    expect(headers["X-XSRF-TOKEN"]).toBe("csrf-9z");
+    expect(headers["Cookie"]).toContain("XSRF-TOKEN=csrf-9z");
+  });
+
+  it("omits X-XSRF-TOKEN when no XSRF cookie is present", () => {
+    expect(xsrfToken(session)).toBeUndefined();
+    expect(sessionAuthHeaders(session)["X-XSRF-TOKEN"]).toBeUndefined();
   });
 });

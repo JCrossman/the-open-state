@@ -210,7 +210,7 @@ describe("availability helpers", () => {
 });
 
 describe("authenticated requests", () => {
-  function recordingClient(cookieProvider?: () => string | undefined) {
+  function recordingClient(authHeaders?: () => Record<string, string> | undefined) {
     const seen: { headers?: Record<string, string> } = {};
     const fetchFn = (async (_input: unknown, init: RequestInit | undefined) => {
       seen.headers = Object.fromEntries(new Headers(init?.headers).entries());
@@ -223,20 +223,25 @@ describe("authenticated requests", () => {
       hostname: "reservation.pc.gc.ca",
       userAgent: "test",
       fetchFn,
-      cookieProvider,
+      authHeaders,
     });
     return { client, seen };
   }
 
-  it("sends the citizen's cookie when connected", async () => {
-    const { client, seen } = recordingClient(() => "SID=abc; queue-it=xyz");
+  it("sends the citizen's cookie and XSRF header when connected", async () => {
+    const { client, seen } = recordingClient(() => ({
+      Cookie: "SID=abc; XSRF-TOKEN=tok",
+      "X-XSRF-TOKEN": "tok",
+    }));
     await client.listCampgrounds();
-    expect(seen.headers?.["cookie"]).toBe("SID=abc; queue-it=xyz");
+    expect(seen.headers?.["cookie"]).toBe("SID=abc; XSRF-TOKEN=tok");
+    expect(seen.headers?.["x-xsrf-token"]).toBe("tok");
   });
 
-  it("omits the cookie header when not connected", async () => {
+  it("omits auth headers when not connected", async () => {
     const { client, seen } = recordingClient();
     await client.listCampgrounds();
     expect(seen.headers?.["cookie"]).toBeUndefined();
+    expect(seen.headers?.["x-xsrf-token"]).toBeUndefined();
   });
 });

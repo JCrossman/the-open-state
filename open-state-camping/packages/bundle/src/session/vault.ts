@@ -136,6 +136,23 @@ export function cookieHeader(session: Session): string {
   return session.cookies.map((c) => `${c.name}=${c.value}`).join("; ");
 }
 
+/** The Angular CSRF token (the `XSRF-TOKEN` cookie value), if present. */
+export function xsrfToken(session: Session): string | undefined {
+  return session.cookies.find((c) => c.name === "XSRF-TOKEN")?.value;
+}
+
+/**
+ * Auth headers to replay the citizen's session on Parks Canada API calls:
+ * the `Cookie` header plus the `X-XSRF-TOKEN` echo Angular expects on
+ * state-changing requests (docs/captures: cookie session + XSRF double-submit).
+ */
+export function sessionAuthHeaders(session: Session): Record<string, string> {
+  const headers: Record<string, string> = { Cookie: cookieHeader(session) };
+  const xsrf = xsrfToken(session);
+  if (xsrf) headers["X-XSRF-TOKEN"] = xsrf;
+  return headers;
+}
+
 /** Constant-time check that two keys match (used by tests/diagnostics). */
 export function keysEqual(a: Buffer, b: Buffer): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
