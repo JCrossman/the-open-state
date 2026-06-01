@@ -191,6 +191,11 @@ export class GoingToCampClient {
     return data && typeof data === "object" ? (data as Record<string, any>) : null;
   }
 
+  /** The signed-in citizen's reservations/bookings (authenticated). */
+  async getMyBookings(): Promise<unknown> {
+    return this.get("/api/shopper/allbookings");
+  }
+
   /**
    * Per-day availability for each site over the stay window. Walks the
    * campground's map tree (root → child maps); one request per map, never more

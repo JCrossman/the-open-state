@@ -118,4 +118,107 @@ export function registerAccountTools(
       );
     },
   );
+
+  server.registerTool(
+    "get_account",
+    {
+      title: "Show my Parks Canada account",
+      description:
+        "Show the citizen's own Parks Canada profile (name, email, phone, " +
+        "address) from their connected session. Requires connect_account first.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async () => {
+      if (!loadSession()) {
+        return text("You're not connected yet. Run connect_account to sign in first.");
+      }
+      try {
+        const info = await provider.getUserInfo();
+        if (!info) {
+          return text(
+            "I couldn't read your account — your session may have expired. Run " +
+              "connect_account to sign in again.",
+          );
+        }
+        return text(formatAccount(info));
+      } catch (err) {
+        return text(err instanceof Error ? err.message : String(err));
+      }
+    },
+  );
+
+  server.registerTool(
+    "list_my_reservations",
+    {
+      title: "Show my Parks Canada reservations",
+      description:
+        "List the citizen's own current and upcoming Parks Canada reservations " +
+        "from their connected session. Requires connect_account first.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async () => {
+      if (!loadSession()) {
+        return text("You're not connected yet. Run connect_account to sign in first.");
+      }
+      try {
+        return text(formatBookings(await provider.getMyBookings()));
+      } catch (err) {
+        return text(err instanceof Error ? err.message : String(err));
+      }
+    },
+  );
+}
+
+/** Best-effort account rendering — Parks Canada's userInfo shape isn't pinned. */
+function formatAccount(info: Record<string, any>): string {
+  const lines = ["Your Parks Canada account:"];
+  const name = [info["firstName"], info["lastName"]].filter(Boolean).join(" ");
+  if (name) lines.push(`- Name: ${name}`);
+  if (info["email"]) lines.push(`- Email: ${info["email"]}`);
+  const phone = info["primaryPhoneNumber"] ?? info["phoneNumbers"]?.["primaryPhoneNumber"];
+  if (phone) lines.push(`- Phone: ${phone}`);
+  const addr = info["addresses"]?.[0] ?? info;
+  const street = addr?.["streetAddress"];
+  if (street) {
+    const city = addr?.["city"];
+    lines.push(`- Address: ${street}${city ? `, ${city}` : ""}`);
+  }
+  if (lines.length === 1) lines.push(JSON.stringify(info).slice(0, 400));
+  return lines.join("\n");
+}
+
+/** Best-effort reservation rendering — shape unconfirmed; refine after first run. */
+function formatBookings(data: unknown): string {
+  const list = Array.isArray(data)
+    ? data
+    : Array.isArray((data as any)?.bookings)
+      ? (data as any).bookings
+      : null;
+  if (!list || list.length === 0) {
+    return "I don't see any reservations on your Parks Canada account.";
+  }
+  const pick = (b: any, keys: string[]) => {
+    for (const k of keys) if (b[k]) return String(b[k]);
+    return "";
+  };
+  const lines = [`You have ${list.length} reservation(s):`];
+  for (const b of list.slice(0, 25)) {
+    const loc = pick(b, ["resourceLocationName", "parkName", "campgroundName", "facilityName", "location"]);
+    const site = pick(b, ["resourceName", "siteName", "resource"]);
+    const start = pick(b, ["startDate", "arrivalDate", "checkInDate", "fromDate"]);
+    const end = pick(b, ["endDate", "departureDate", "checkOutDate", "toDate"]);
+    const status = pick(b, ["statusName", "status"]);
+    const ref = pick(b, ["referenceNumber", "confirmationNumber", "bookingReference"]);
+    const parts = [
+      loc,
+      site && `site ${site}`,
+      start || end ? `${start} to ${end}` : "",
+      status,
+      ref && `ref ${ref}`,
+    ].filter(Boolean);
+    lines.push("- " + (parts.length > 0 ? parts.join("; ") : JSON.stringify(b).slice(0, 160)));
+  }
+  return lines.join("\n");
 }

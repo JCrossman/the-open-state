@@ -280,6 +280,11 @@ export class ParksCanadaProvider {
     return this.client.getUserInfo();
   }
 
+  /** The signed-in citizen's reservations/bookings. */
+  getMyBookings(): Promise<unknown> {
+    return this.client.getMyBookings();
+  }
+
   async bookingUrl(opts: {
     campgroundId: string;
     startDate: ISODate;
