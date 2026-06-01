@@ -134,7 +134,8 @@ export function registerAccountTools(
         return text("You're not connected yet. Run connect_account to sign in first.");
       }
       try {
-        const info = await provider.getUserInfo();
+        // The full profile is on /api/shopper; userInfo is just name+email.
+        const info = (await provider.getShopper()) ?? (await provider.getUserInfo());
         if (!info) {
           return text(
             "I couldn't read your account — your session may have expired. Run " +
@@ -171,21 +172,41 @@ export function registerAccountTools(
   );
 }
 
-/** Best-effort account rendering — Parks Canada's userInfo shape isn't pinned. */
+/**
+ * Render the citizen's profile. Handles the /api/shopper shape (phoneNumbers
+ * object + addresses array) and the flatter userInfo/register shape, with a
+ * JSON fallback so nothing is silently dropped.
+ */
 function formatAccount(info: Record<string, any>): string {
   const lines = ["Your Parks Canada account:"];
   const name = [info["firstName"], info["lastName"]].filter(Boolean).join(" ");
   if (name) lines.push(`- Name: ${name}`);
   if (info["email"]) lines.push(`- Email: ${info["email"]}`);
-  const phone = info["primaryPhoneNumber"] ?? info["phoneNumbers"]?.["primaryPhoneNumber"];
-  if (phone) lines.push(`- Phone: ${phone}`);
-  const addr = info["addresses"]?.[0] ?? info;
-  const street = addr?.["streetAddress"];
-  if (street) {
-    const city = addr?.["city"];
-    lines.push(`- Address: ${street}${city ? `, ${city}` : ""}`);
+
+  const phones = info["phoneNumbers"] ?? info;
+  const primary = phones?.["primaryPhoneNumber"] ?? info["primaryPhoneNumber"];
+  if (primary) lines.push(`- Phone: ${primary}`);
+  const secondary = phones?.["secondaryPhoneNumber"];
+  if (secondary) lines.push(`- Secondary phone: ${secondary}`);
+
+  const a = info["addresses"]?.[0] ?? info;
+  const street = [a?.["streetAddress"], a?.["unit"]].filter(Boolean).join(" ");
+  const cityLine = [a?.["city"], a?.["region"] ?? a?.["regionName"], a?.["postalCode"]]
+    .filter(Boolean)
+    .join(", ");
+  if (street || cityLine) {
+    lines.push(`- Address: ${[street, cityLine].filter(Boolean).join(", ")}`);
   }
-  if (lines.length === 1) lines.push(JSON.stringify(info).slice(0, 400));
+
+  if (info["preferredCultureName"]) lines.push(`- Language: ${info["preferredCultureName"]}`);
+  const plates = ((info["vehicles"] as any[]) ?? [])
+    .map((v) => v?.["licensePlate"] ?? v?.["vehicleLicensePlate"])
+    .filter(Boolean);
+  if (info["vehicleLicensePlate"]) plates.push(info["vehicleLicensePlate"]);
+  if (plates.length > 0) lines.push(`- Vehicle plate: ${plates.join(", ")}`);
+
+  // If we somehow recognized nothing beyond the header, show the raw record.
+  if (lines.length === 1) lines.push(JSON.stringify(info).slice(0, 600));
   return lines.join("\n");
 }
 

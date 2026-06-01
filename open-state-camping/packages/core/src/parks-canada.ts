@@ -285,6 +285,11 @@ export class ParksCanadaProvider {
     return this.client.getMyBookings();
   }
 
+  /** The citizen's full shopper profile (phone, address, etc.). */
+  getShopper(): Promise<Record<string, any> | null> {
+    return this.client.getShopper();
+  }
+
   async bookingUrl(opts: {
     campgroundId: string;
     startDate: ISODate;

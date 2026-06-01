@@ -196,6 +196,12 @@ export class GoingToCampClient {
     return this.get("/api/shopper/allbookings");
   }
 
+  /** The citizen's full shopper profile — phone, address, language, vehicles. */
+  async getShopper(): Promise<Record<string, any> | null> {
+    const data = (await this.get("/api/shopper")) as unknown;
+    return data && typeof data === "object" ? (data as Record<string, any>) : null;
+  }
+
   /**
    * Per-day availability for each site over the stay window. Walks the
    * campground's map tree (root → child maps); one request per map, never more
