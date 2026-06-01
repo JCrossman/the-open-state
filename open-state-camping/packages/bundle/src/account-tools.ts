@@ -6,6 +6,7 @@
  * use to confirm a booking themselves later (Constitution Articles 1, 2, 10).
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
 import type { ParksCanadaProvider } from "@open-state/core";
 import { captureSession } from "./session/capture.js";
 import { clearSession, loadSession, saveSession } from "./session/vault.js";
@@ -170,6 +171,108 @@ export function registerAccountTools(
       }
     },
   );
+
+  server.registerTool(
+    "update_account",
+    {
+      title: "Update my Parks Canada profile",
+      description:
+        "Update the citizen's OWN Parks Canada profile — phone, address, name, " +
+        "or language. This changes their official account record, so ONLY call " +
+        "it after the citizen has told you the exact change AND confirmed it. " +
+        "Pass only the fields to change; everything else is kept. Never change " +
+        "anything without the citizen's explicit go-ahead; the result shows them " +
+        "exactly what changed.",
+      inputSchema: {
+        first_name: z.string().optional(),
+        last_name: z.string().optional(),
+        primary_phone: z.string().optional(),
+        secondary_phone: z.string().optional(),
+        street_address: z.string().optional(),
+        unit: z.string().optional(),
+        city: z.string().optional(),
+        region: z.string().optional(),
+        postal_code: z.string().optional(),
+        language: z.string().optional(),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    },
+    async (args) => {
+      if (!loadSession()) {
+        return text("You're not connected yet. Run connect_account to sign in first.");
+      }
+      try {
+        const current = await provider.getShopper();
+        if (!current) {
+          return text(
+            "I couldn't read your account — your session may have expired. Run " +
+              "connect_account to sign in again.",
+          );
+        }
+        const before = formatAccount(current);
+        const updated: Record<string, any> = structuredClone(current);
+        const changed = applyAccountChanges(updated, args);
+        if (changed.length === 0) {
+          return text(
+            "Tell me what to change — phone, address, name, or language — and " +
+              "I'll update it once you confirm.",
+          );
+        }
+        await provider.updateShopper(updated);
+        const after = await provider.getShopper();
+        return text(
+          `Updated your Parks Canada account (${changed.join(", ")}).\n\n` +
+            `Before:\n${before}\n\nNow:\n${formatAccount(after ?? updated)}`,
+        );
+      } catch (err) {
+        return text(err instanceof Error ? err.message : String(err));
+      }
+    },
+  );
+}
+
+/** Apply requested profile changes to the shopper record; returns what changed. */
+function applyAccountChanges(p: Record<string, any>, args: Record<string, any>): string[] {
+  const changed: string[] = [];
+  const setPhone = (key: string, val: string, label: string) => {
+    p["phoneNumbers"] = p["phoneNumbers"] ?? {};
+    p["phoneNumbers"][key] = val;
+    if (key in p) p[key] = val; // flat shape too
+    changed.push(label);
+  };
+  if (args["first_name"]) {
+    p["firstName"] = args["first_name"];
+    changed.push("first name");
+  }
+  if (args["last_name"]) {
+    p["lastName"] = args["last_name"];
+    changed.push("last name");
+  }
+  if (args["primary_phone"]) setPhone("primaryPhoneNumber", args["primary_phone"], "phone");
+  if (args["secondary_phone"]) {
+    setPhone("secondaryPhoneNumber", args["secondary_phone"], "secondary phone");
+  }
+  if (args["language"]) {
+    p["preferredCultureName"] = args["language"];
+    changed.push("language");
+  }
+
+  const addrArgs = ["street_address", "unit", "city", "region", "postal_code"];
+  if (addrArgs.some((f) => args[f] != null)) {
+    p["addresses"] = p["addresses"] ?? [{}];
+    const a = (p["addresses"][0] = p["addresses"][0] ?? {});
+    const setAddr = (key: string, val: string, label: string) => {
+      a[key] = val;
+      if (key in p) p[key] = val; // flat shape too
+      changed.push(label);
+    };
+    if (args["street_address"]) setAddr("streetAddress", args["street_address"], "street address");
+    if (args["unit"] != null) setAddr("unit", args["unit"], "unit");
+    if (args["city"]) setAddr("city", args["city"], "city");
+    if (args["region"]) setAddr("region", args["region"], "region");
+    if (args["postal_code"]) setAddr("postalCode", args["postal_code"], "postal code");
+  }
+  return changed;
 }
 
 /**

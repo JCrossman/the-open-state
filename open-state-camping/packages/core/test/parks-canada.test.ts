@@ -244,4 +244,32 @@ describe("authenticated requests", () => {
     expect(seen.headers?.["cookie"]).toBeUndefined();
     expect(seen.headers?.["x-xsrf-token"]).toBeUndefined();
   });
+
+  it("posts state-changing writes with cookie, XSRF, and a JSON body", async () => {
+    const seen: { method?: string; headers?: Record<string, string>; body?: string } = {};
+    const fetchFn = (async (_input: unknown, init: RequestInit | undefined) => {
+      seen.method = init?.method;
+      seen.headers = Object.fromEntries(new Headers(init?.headers).entries());
+      seen.body = init?.body as string;
+      return new Response("{}", {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as FetchLike;
+    const client = new GoingToCampClient({
+      hostname: "reservation.pc.gc.ca",
+      userAgent: "test",
+      fetchFn,
+      authHeaders: () => ({ Cookie: "SID=1; XSRF-TOKEN=tok", "X-XSRF-TOKEN": "tok" }),
+    });
+    await client.updateShopper({ firstName: "Jeremy", phoneNumbers: { primaryPhoneNumber: "+1555" } });
+    expect(seen.method).toBe("POST");
+    expect(seen.headers?.["x-xsrf-token"]).toBe("tok");
+    expect(seen.headers?.["cookie"]).toContain("SID=1");
+    expect(seen.headers?.["content-type"]).toBe("application/json");
+    expect(JSON.parse(seen.body!)).toEqual({
+      firstName: "Jeremy",
+      phoneNumbers: { primaryPhoneNumber: "+1555" },
+    });
+  });
 });

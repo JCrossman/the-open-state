@@ -119,6 +119,47 @@ export class GoingToCampClient {
     }
   }
 
+  /**
+   * Authenticated POST with the citizen's session (Cookie + X-XSRF-TOKEN). Used
+   * for state-changing actions the citizen has confirmed (profile update, and
+   * later the booking cart). Never called without an explicit citizen go-ahead
+   * at the tool layer (Constitution Art. 2).
+   */
+  private async post(path: string, body: unknown): Promise<unknown> {
+    let resp: Response;
+    try {
+      resp = await this.fetchFn(this.base + path, {
+        method: "POST",
+        headers: { ...this.requestHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        redirect: "follow",
+        signal: AbortSignal.timeout(this.timeoutMs),
+      });
+    } catch (exc) {
+      throw new UpstreamError(
+        `Could not reach the Parks Canada booking system (${String(exc)}).`,
+      );
+    }
+    if (resp.url.includes("queue-it.net")) {
+      throw new QueueItError(
+        "Parks Canada is using a virtual waiting room right now. " +
+          "Please try again shortly.",
+      );
+    }
+    if (resp.status >= 400) {
+      throw new UpstreamError(
+        `The Parks Canada booking system returned an error ` +
+          `(HTTP ${resp.status}) for ${path}.`,
+      );
+    }
+    // A successful write may return JSON, or an empty body — both are fine.
+    try {
+      return await resp.json();
+    } catch {
+      return null;
+    }
+  }
+
   // -- endpoints ------------------------------------------------------------
 
   /** Reservable campgrounds: id, name, and root map id. */
@@ -200,6 +241,15 @@ export class GoingToCampClient {
   async getShopper(): Promise<Record<string, any> | null> {
     const data = (await this.get("/api/shopper")) as unknown;
     return data && typeof data === "object" ? (data as Record<string, any>) : null;
+  }
+
+  /**
+   * Update the citizen's shopper profile. The caller passes the full profile
+   * (read via getShopper, then modified) so server-managed fields are
+   * preserved. State-changing — only after the citizen confirms (Art. 2).
+   */
+  async updateShopper(profile: Record<string, any>): Promise<unknown> {
+    return this.post("/api/shopper", profile);
   }
 
   /**

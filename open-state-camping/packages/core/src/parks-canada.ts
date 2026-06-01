@@ -290,6 +290,11 @@ export class ParksCanadaProvider {
     return this.client.getShopper();
   }
 
+  /** Update the citizen's profile (after they confirm). */
+  updateShopper(profile: Record<string, any>): Promise<unknown> {
+    return this.client.updateShopper(profile);
+  }
+
   async bookingUrl(opts: {
     campgroundId: string;
     startDate: ISODate;
