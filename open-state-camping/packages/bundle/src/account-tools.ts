@@ -78,23 +78,30 @@ export function registerAccountTools(
             "own browser.",
         );
       }
+      const names = session.cookies.map((c) => c.name);
+      const diag =
+        `\n\nDiagnostics — captured cookies (${names.length}): ${names.join(", ")}.` +
+        ` XSRF-TOKEN present: ${names.includes("XSRF-TOKEN") ? "yes" : "NO"}.`;
       try {
         const info = await provider.getUserInfo();
         if (info && (info["email"] || info["firstName"] || info["shopperUid"])) {
           const name = info["firstName"] || info["email"];
           return text(
             `Connected and your session is active${name ? ` — signed in as ${String(name)}` : ""}` +
-              ` (captured ${session.capturedAt}).`,
+              ` (captured ${session.capturedAt}).` +
+              diag,
           );
         }
         return text(
           "A session is saved, but it looks expired. Run connect_account to sign " +
-            "in again.",
+            "in again." +
+            diag,
         );
       } catch {
         return text(
           `A session is saved (captured ${session.capturedAt}), but I couldn't ` +
-            "verify it just now. If bookings don't work, run connect_account again.",
+            "verify it just now. If bookings don't work, run connect_account again." +
+            diag,
         );
       }
     },

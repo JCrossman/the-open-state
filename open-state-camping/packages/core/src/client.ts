@@ -62,6 +62,11 @@ export class GoingToCampClient {
       "User-Agent": opts.userAgent ?? DEFAULT_USER_AGENT,
       Accept: "application/json, text/plain, */*",
       "Accept-Language": "en-CA,en;q=0.9",
+      "app-language": "en-CA",
+      // The browser sends Origin/Referer on every XHR; some anti-forgery/WAF
+      // rules reject a write that's missing Origin. Node's fetch won't set it
+      // for us, so we set it explicitly.
+      Origin: this.base,
       Referer: `${this.base}/`,
     };
   }
