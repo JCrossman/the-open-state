@@ -248,6 +248,30 @@ export function registerAccountTools(
       );
     },
   );
+
+  server.registerTool(
+    "debug_account_shape",
+    {
+      title: "Diagnostics: account data shape",
+      description:
+        "Diagnostic only. Returns the structure of your Parks Canada profile " +
+        "(GET /api/shopper) with personal values masked, to help debug account " +
+        "updates. Safe to share — no personal values are included.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async () => {
+      if (!loadSession()) {
+        return text("Not connected. Run connect_account first.");
+      }
+      try {
+        const raw = await provider.getShopper();
+        return text("GET /api/shopper shape (values masked):\n" + maskedJson(raw));
+      } catch (err) {
+        return text(err instanceof Error ? err.message : String(err));
+      }
+    },
+  );
 }
 
 /** Plain-language labels for the fields the citizen asked to change. */
@@ -300,7 +324,11 @@ function buildUpdatedShopper(
 
   if (has("first_name")) p["firstName"] = args["first_name"];
   if (has("last_name")) p["lastName"] = args["last_name"];
-  if (has("language")) p["preferredCultureName"] = args["language"];
+  // POST requires a valid culture (en-CA / fr-CA). GET can return it in a form
+  // POST rejects ("Preferred culture does not exist"), so always coerce.
+  p["preferredCultureName"] = normalizeCulture(
+    has("language") ? args["language"] : p["preferredCultureName"],
+  );
 
   if (has("primary_phone") || has("secondary_phone")) {
     p["phoneNumbers"] = p["phoneNumbers"] ?? {};
@@ -327,6 +355,11 @@ function buildUpdatedShopper(
     if (has("postal_code")) a["regionCode"] = args["postal_code"];
   }
   return p;
+}
+
+/** Coerce a culture to a value Parks Canada accepts (bilingual: en-CA / fr-CA). */
+function normalizeCulture(v: unknown): string {
+  return String(v ?? "").toLowerCase().startsWith("fr") ? "fr-CA" : "en-CA";
 }
 
 /** JSON dump with personal values masked (keeps keys/structure for diagnosis). */

@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "open-state-camping",
   "display_name": "The Open State: Camping",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "description": "Find and (soon) book Parks Canada campsites in plain language, accessibly — from your own machine.",
   "long_description": "An independent, public-interest assistive tool. It searches Parks Canada campsite availability in plain language, puts accessibility first, and runs entirely on your own device so your searches come from your own connection. It is not operated by or endorsed by Parks Canada. It never stores your government login and never books on its own — you confirm everything yourself.",
   "author": {
@@ -66,6 +66,10 @@
     {
       "name": "update_account",
       "description": "Update your Parks Canada profile (phone, address, name, language) after you confirm the change."
+    },
+    {
+      "name": "debug_account_shape",
+      "description": "Diagnostic: profile data shape (personal values masked)."
     }
   ]
 }
