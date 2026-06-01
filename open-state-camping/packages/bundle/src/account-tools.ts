@@ -208,34 +208,44 @@ export function registerAccountTools(
       if (!loadSession()) {
         return text("You're not connected yet. Run connect_account to sign in first.");
       }
-      try {
-        const current = await provider.getShopper();
-        if (!current) {
-          return text(
-            "I couldn't read your account — your session may have expired. Run " +
-              "connect_account to sign in again.",
-          );
-        }
-        const before = formatAccount(current);
-        const changed = changedFields(args);
-        if (changed.length === 0) {
-          return text(
-            "Tell me what to change — phone, address, name, or language — and " +
-              "I'll update it once you confirm.",
-          );
-        }
-        // Post the exact DTO the API accepts (built from the current profile +
-        // the change), not the raw GET record, which carries fields POST rejects.
-        const dto = toShopperUpdateDTO(current, args);
-        await provider.updateShopper(dto);
-        const after = await provider.getShopper();
+      const changed = changedFields(args);
+      if (changed.length === 0) {
         return text(
-          `Updated your Parks Canada account (${changed.join(", ")}).\n\n` +
-            `Before:\n${before}\n\nNow:\n${formatAccount(after ?? dto)}`,
+          "Tell me what to change — phone, address, name, or language — and " +
+            "I'll update it once you confirm.",
         );
+      }
+      let current: Record<string, any> | null;
+      try {
+        current = await provider.getShopper();
       } catch (err) {
         return text(err instanceof Error ? err.message : String(err));
       }
+      if (!current) {
+        return text(
+          "I couldn't read your account — your session may have expired. Run " +
+            "connect_account to sign in again.",
+        );
+      }
+      const before = formatAccount(current);
+      // Mutate the exact record the API returned (changing only what was asked +
+      // completedDate), so every other field keeps the server's own names/values
+      // — reconstructing it was what tripped CanadianFormatMismatch.
+      const dto = buildUpdatedShopper(current, args);
+      try {
+        await provider.updateShopper(dto);
+      } catch (err) {
+        return text(
+          `${err instanceof Error ? err.message : String(err)}\n\n` +
+            "Diagnostic — the profile I tried to send (your personal values " +
+            `masked):\n${maskedJson(dto)}`,
+        );
+      }
+      const after = await provider.getShopper().catch(() => null);
+      return text(
+        `Updated your Parks Canada account (${changed.join(", ")}).\n\n` +
+          `Before:\n${before}\n\nNow:\n${formatAccount(after ?? dto)}`,
+      );
     },
   );
 }
@@ -274,71 +284,69 @@ export function normalizePhone(raw: string): string {
 }
 
 /**
- * Build the exact profile DTO `POST /api/shopper` accepts (verified shape from a
- * live capture), sourcing values from the current profile and applying the
- * requested changes. Sends only the expected keys — posting the raw GET record
- * (with its extra fields) is rejected with HTTP 400. `postal_code` maps to the
- * address `regionCode` field this endpoint uses.
+ * Take the exact shopper record the API returned (GET /api/shopper) and change
+ * only the requested fields, plus completedDate. Preserving the server's own
+ * field names/values — rather than rebuilding the object — is what avoids the
+ * CanadianFormatMismatch the reconstruct approach hit. Mirrors the website,
+ * which GETs the profile, edits a field, and POSTs it back.
  */
-function toShopperUpdateDTO(
+function buildUpdatedShopper(
   cur: Record<string, any>,
   args: Record<string, any>,
 ): Record<string, any> {
   const has = (k: string) => args[k] != null && args[k] !== "";
-  const phones = cur["phoneNumbers"] ?? {};
-  const a = cur["addresses"]?.[0] ?? {};
-  return {
-    completedDate: new Date().toISOString(),
-    firstName: has("first_name") ? args["first_name"] : (cur["firstName"] ?? ""),
-    lastName: has("last_name") ? args["last_name"] : (cur["lastName"] ?? ""),
-    email: cur["email"] ?? "",
-    communicationPreferences: cur["communicationPreferences"] ?? [
-      { channel: 0, context: 0, consentGranted: false },
-      { channel: 1, context: 1, consentGranted: false },
-    ],
-    preferredCultureName: has("language")
-      ? args["language"]
-      : (cur["preferredCultureName"] ?? "en-CA"),
-    flaggedStartDate: cur["flaggedStartDate"] ?? null,
-    flaggedEndDate: cur["flaggedEndDate"] ?? null,
-    vehicles: cur["vehicles"] ?? [],
-    boats: cur["boats"] ?? [],
-    phoneNumbers: {
-      primaryPhoneNumber: has("primary_phone")
-        ? normalizePhone(args["primary_phone"])
-        : (phones["primaryPhoneNumber"] ?? null),
-      primaryCountryCode: phones["primaryCountryCode"] ?? "CA",
-      secondaryPhoneNumber: has("secondary_phone")
-        ? normalizePhone(args["secondary_phone"])
-        : (phones["secondaryPhoneNumber"] ?? null),
-      secondaryCountryCode: has("secondary_phone")
-        ? (phones["secondaryCountryCode"] ?? "CA")
-        : (phones["secondaryCountryCode"] ?? null),
-    },
-    contact: cur["contact"] ?? {
-      contactName: "",
-      phoneNumberCountryCode: null,
-      phoneNumber: "",
-      email: "",
-    },
-    addresses: [
-      {
-        description: a["description"] ?? null,
-        unit: has("unit") ? args["unit"] : (a["unit"] ?? ""),
-        streetAddress: has("street_address") ? args["street_address"] : (a["streetAddress"] ?? ""),
-        city: has("city") ? args["city"] : (a["city"] ?? ""),
-        region: has("region") ? args["region"] : (a["region"] ?? ""),
-        regionCode: has("postal_code") ? args["postal_code"] : (a["regionCode"] ?? ""),
-        country: a["country"] ?? "Canada",
-      },
-    ],
-    defaultSubEquipmentCategoryId: cur["defaultSubEquipmentCategoryId"] ?? null,
-    defaultRateCategoryId: cur["defaultRateCategoryId"] ?? null,
-    defaultPassNumber: cur["defaultPassNumber"] ?? "",
-    defaultPassExpiryDate: cur["defaultPassExpiryDate"] ?? null,
-    allowedRestrictedRateCategories: cur["allowedRestrictedRateCategories"] ?? [],
-    disallowedPublicRateCategories: cur["disallowedPublicRateCategories"] ?? [],
+  const p: Record<string, any> = structuredClone(cur);
+  p["completedDate"] = new Date().toISOString();
+
+  if (has("first_name")) p["firstName"] = args["first_name"];
+  if (has("last_name")) p["lastName"] = args["last_name"];
+  if (has("language")) p["preferredCultureName"] = args["language"];
+
+  if (has("primary_phone") || has("secondary_phone")) {
+    p["phoneNumbers"] = p["phoneNumbers"] ?? {};
+    if (has("primary_phone")) {
+      p["phoneNumbers"]["primaryPhoneNumber"] = normalizePhone(args["primary_phone"]);
+      p["phoneNumbers"]["primaryCountryCode"] = p["phoneNumbers"]["primaryCountryCode"] ?? "CA";
+    }
+    if (has("secondary_phone")) {
+      p["phoneNumbers"]["secondaryPhoneNumber"] = normalizePhone(args["secondary_phone"]);
+      p["phoneNumbers"]["secondaryCountryCode"] = p["phoneNumbers"]["secondaryCountryCode"] ?? "CA";
+    }
+  }
+
+  const addrKeys = ["street_address", "unit", "city", "region", "postal_code"];
+  if (addrKeys.some((k) => has(k))) {
+    if (!Array.isArray(p["addresses"]) || p["addresses"].length === 0) {
+      p["addresses"] = [{}];
+    }
+    const a = p["addresses"][0];
+    if (has("street_address")) a["streetAddress"] = args["street_address"];
+    if (has("unit")) a["unit"] = args["unit"];
+    if (has("city")) a["city"] = args["city"];
+    if (has("region")) a["region"] = args["region"];
+    if (has("postal_code")) a["regionCode"] = args["postal_code"];
+  }
+  return p;
+}
+
+/** JSON dump with personal values masked (keeps keys/structure for diagnosis). */
+function maskedJson(obj: unknown): string {
+  const PII = new Set([
+    "firstName", "lastName", "email", "primaryPhoneNumber", "secondaryPhoneNumber",
+    "streetAddress", "city", "contactName", "phoneNumber", "region", "regionCode",
+    "unit", "postalCode",
+  ]);
+  const mask = (v: any, k?: string): any => {
+    if (k && PII.has(k)) {
+      return v == null ? v : typeof v === "string" ? `<set:${v.length}chars>` : "<masked>";
+    }
+    if (Array.isArray(v)) return v.map((x) => mask(x));
+    if (v && typeof v === "object") {
+      return Object.fromEntries(Object.entries(v).map(([kk, vv]) => [kk, mask(vv, kk)]));
+    }
+    return v;
   };
+  return JSON.stringify(mask(obj), null, 2);
 }
 
 /**
