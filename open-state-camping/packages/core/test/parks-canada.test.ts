@@ -272,4 +272,24 @@ describe("authenticated requests", () => {
       phoneNumbers: { primaryPhoneNumber: "+1555" },
     });
   });
+
+  it("unwraps the currentVersion profile from GET /api/shopper", async () => {
+    const fetchFn = (async () =>
+      new Response(
+        JSON.stringify({
+          shopperUid: "x",
+          currentVersion: { firstName: "Jeremy", phoneNumbers: { primaryPhoneNumber: "+1" } },
+          history: [],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      )) as FetchLike;
+    const client = new GoingToCampClient({
+      hostname: "reservation.pc.gc.ca",
+      userAgent: "test",
+      fetchFn,
+    });
+    const profile = await client.getShopper();
+    expect(profile?.["firstName"]).toBe("Jeremy");
+    expect(profile?.["shopperUid"]).toBeUndefined(); // wrapper stripped
+  });
 });

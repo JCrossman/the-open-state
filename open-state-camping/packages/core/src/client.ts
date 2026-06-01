@@ -236,10 +236,18 @@ export class GoingToCampClient {
     return this.get("/api/shopper/allbookings");
   }
 
-  /** The citizen's full shopper profile — phone, address, language, vehicles. */
+  /**
+   * The citizen's full shopper profile — phone, address, language, vehicles.
+   * GET /api/shopper wraps the profile: `{ shopperUid, currentVersion: {…the
+   * profile…}, history, … }`. We return `currentVersion` (the flat profile that
+   * POST /api/shopper also expects), so reads and updates work on the same shape.
+   */
   async getShopper(): Promise<Record<string, any> | null> {
     const data = (await this.get("/api/shopper")) as unknown;
-    return data && typeof data === "object" ? (data as Record<string, any>) : null;
+    if (!data || typeof data !== "object") return null;
+    const obj = data as Record<string, any>;
+    const cv = obj["currentVersion"];
+    return cv && typeof cv === "object" ? (cv as Record<string, any>) : obj;
   }
 
   /**
