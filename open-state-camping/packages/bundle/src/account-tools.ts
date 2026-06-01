@@ -217,19 +217,21 @@ export function registerAccountTools(
           );
         }
         const before = formatAccount(current);
-        const updated: Record<string, any> = structuredClone(current);
-        const changed = applyAccountChanges(updated, args);
+        const changed = changedFields(args);
         if (changed.length === 0) {
           return text(
             "Tell me what to change — phone, address, name, or language — and " +
               "I'll update it once you confirm.",
           );
         }
-        await provider.updateShopper(updated);
+        // Post the exact DTO the API accepts (built from the current profile +
+        // the change), not the raw GET record, which carries fields POST rejects.
+        const dto = toShopperUpdateDTO(current, args);
+        await provider.updateShopper(dto);
         const after = await provider.getShopper();
         return text(
           `Updated your Parks Canada account (${changed.join(", ")}).\n\n` +
-            `Before:\n${before}\n\nNow:\n${formatAccount(after ?? updated)}`,
+            `Before:\n${before}\n\nNow:\n${formatAccount(after ?? dto)}`,
         );
       } catch (err) {
         return text(err instanceof Error ? err.message : String(err));
@@ -238,48 +240,91 @@ export function registerAccountTools(
   );
 }
 
-/** Apply requested profile changes to the shopper record; returns what changed. */
-function applyAccountChanges(p: Record<string, any>, args: Record<string, any>): string[] {
-  const changed: string[] = [];
-  const setPhone = (key: string, val: string, label: string) => {
-    p["phoneNumbers"] = p["phoneNumbers"] ?? {};
-    p["phoneNumbers"][key] = val;
-    if (key in p) p[key] = val; // flat shape too
-    changed.push(label);
+/** Plain-language labels for the fields the citizen asked to change. */
+function changedFields(args: Record<string, any>): string[] {
+  const labels: Record<string, string> = {
+    first_name: "first name",
+    last_name: "last name",
+    primary_phone: "phone",
+    secondary_phone: "secondary phone",
+    street_address: "street address",
+    unit: "unit",
+    city: "city",
+    region: "region",
+    postal_code: "postal code",
+    language: "language",
   };
-  if (args["first_name"]) {
-    p["firstName"] = args["first_name"];
-    changed.push("first name");
-  }
-  if (args["last_name"]) {
-    p["lastName"] = args["last_name"];
-    changed.push("last name");
-  }
-  if (args["primary_phone"]) setPhone("primaryPhoneNumber", args["primary_phone"], "phone");
-  if (args["secondary_phone"]) {
-    setPhone("secondaryPhoneNumber", args["secondary_phone"], "secondary phone");
-  }
-  if (args["language"]) {
-    p["preferredCultureName"] = args["language"];
-    changed.push("language");
-  }
+  return Object.keys(labels)
+    .filter((k) => args[k] != null && args[k] !== "")
+    .map((k) => labels[k]!);
+}
 
-  const addrArgs = ["street_address", "unit", "city", "region", "postal_code"];
-  if (addrArgs.some((f) => args[f] != null)) {
-    p["addresses"] = p["addresses"] ?? [{}];
-    const a = (p["addresses"][0] = p["addresses"][0] ?? {});
-    const setAddr = (key: string, val: string, label: string) => {
-      a[key] = val;
-      if (key in p) p[key] = val; // flat shape too
-      changed.push(label);
-    };
-    if (args["street_address"]) setAddr("streetAddress", args["street_address"], "street address");
-    if (args["unit"] != null) setAddr("unit", args["unit"], "unit");
-    if (args["city"]) setAddr("city", args["city"], "city");
-    if (args["region"]) setAddr("region", args["region"], "region");
-    if (args["postal_code"]) setAddr("postalCode", args["postal_code"], "postal code");
-  }
-  return changed;
+/**
+ * Build the exact profile DTO `POST /api/shopper` accepts (verified shape from a
+ * live capture), sourcing values from the current profile and applying the
+ * requested changes. Sends only the expected keys — posting the raw GET record
+ * (with its extra fields) is rejected with HTTP 400. `postal_code` maps to the
+ * address `regionCode` field this endpoint uses.
+ */
+function toShopperUpdateDTO(
+  cur: Record<string, any>,
+  args: Record<string, any>,
+): Record<string, any> {
+  const has = (k: string) => args[k] != null && args[k] !== "";
+  const phones = cur["phoneNumbers"] ?? {};
+  const a = cur["addresses"]?.[0] ?? {};
+  return {
+    completedDate: new Date().toISOString(),
+    firstName: has("first_name") ? args["first_name"] : (cur["firstName"] ?? ""),
+    lastName: has("last_name") ? args["last_name"] : (cur["lastName"] ?? ""),
+    email: cur["email"] ?? "",
+    communicationPreferences: cur["communicationPreferences"] ?? [
+      { channel: 0, context: 0, consentGranted: false },
+      { channel: 1, context: 1, consentGranted: false },
+    ],
+    preferredCultureName: has("language")
+      ? args["language"]
+      : (cur["preferredCultureName"] ?? "en-CA"),
+    flaggedStartDate: cur["flaggedStartDate"] ?? null,
+    flaggedEndDate: cur["flaggedEndDate"] ?? null,
+    vehicles: cur["vehicles"] ?? [],
+    boats: cur["boats"] ?? [],
+    phoneNumbers: {
+      primaryPhoneNumber: has("primary_phone")
+        ? args["primary_phone"]
+        : (phones["primaryPhoneNumber"] ?? null),
+      primaryCountryCode: phones["primaryCountryCode"] ?? "CA",
+      secondaryPhoneNumber: has("secondary_phone")
+        ? args["secondary_phone"]
+        : (phones["secondaryPhoneNumber"] ?? null),
+      secondaryCountryCode: has("secondary_phone")
+        ? (phones["secondaryCountryCode"] ?? "CA")
+        : (phones["secondaryCountryCode"] ?? null),
+    },
+    contact: cur["contact"] ?? {
+      contactName: "",
+      phoneNumberCountryCode: null,
+      phoneNumber: "",
+      email: "",
+    },
+    addresses: [
+      {
+        description: a["description"] ?? null,
+        unit: has("unit") ? args["unit"] : (a["unit"] ?? ""),
+        streetAddress: has("street_address") ? args["street_address"] : (a["streetAddress"] ?? ""),
+        city: has("city") ? args["city"] : (a["city"] ?? ""),
+        region: has("region") ? args["region"] : (a["region"] ?? ""),
+        regionCode: has("postal_code") ? args["postal_code"] : (a["regionCode"] ?? ""),
+        country: a["country"] ?? "Canada",
+      },
+    ],
+    defaultSubEquipmentCategoryId: cur["defaultSubEquipmentCategoryId"] ?? null,
+    defaultRateCategoryId: cur["defaultRateCategoryId"] ?? null,
+    defaultPassNumber: cur["defaultPassNumber"] ?? "",
+    defaultPassExpiryDate: cur["defaultPassExpiryDate"] ?? null,
+    allowedRestrictedRateCategories: cur["allowedRestrictedRateCategories"] ?? [],
+    disallowedPublicRateCategories: cur["disallowedPublicRateCategories"] ?? [],
+  };
 }
 
 /**
