@@ -109,10 +109,7 @@ export class GoingToCampClient {
       );
     }
     if (resp.status >= 400) {
-      throw new UpstreamError(
-        `The Parks Canada booking system returned an error ` +
-          `(HTTP ${resp.status}) for ${path}.`,
-      );
+      throw new UpstreamError(await describeError(resp, path));
     }
     try {
       return await resp.json();
@@ -152,10 +149,7 @@ export class GoingToCampClient {
       );
     }
     if (resp.status >= 400) {
-      throw new UpstreamError(
-        `The Parks Canada booking system returned an error ` +
-          `(HTTP ${resp.status}) for ${path}.`,
-      );
+      throw new UpstreamError(await describeError(resp, path));
     }
     // A successful write may return JSON, or an empty body — both are fine.
     try {
@@ -371,6 +365,23 @@ function availabilityParams(
   };
   if (equipmentId != null) params["subEquipmentCategoryId"] = equipmentId;
   return params;
+}
+
+/** Build an UpstreamError that includes the platform's response body (e.g. the
+ *  ASP.NET validation message naming the bad field), which is essential for
+ *  diagnosing 400s. The body holds no secrets — just the error detail. */
+async function describeError(resp: Response, path: string): Promise<string> {
+  let detail = "";
+  try {
+    detail = (await resp.text()).trim().slice(0, 500);
+  } catch {
+    /* body unreadable */
+  }
+  return (
+    `The Parks Canada booking system returned an error (HTTP ${resp.status}) ` +
+    `for ${path}.` +
+    (detail ? ` Details: ${detail}` : "")
+  );
 }
 
 /** Return true if a resource record is marked accessible (attribute -32756 = 0). */
