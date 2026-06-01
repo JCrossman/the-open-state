@@ -6,6 +6,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { GoingToCampClient, ParksCanadaProvider, type FetchLike } from "@open-state/core";
 import { createServerForProvider } from "../src/server.js";
 import { flexibleRangeHint } from "../src/tools.js";
+import { normalizePhone } from "../src/account-tools.js";
 
 const CAMPGROUND_ID = "-2147483644";
 const ROOT_MAP_ID = "-2147483626";
@@ -162,6 +163,18 @@ describe("bundle MCP server", () => {
     });
     expect(out).toContain("create-booking/results");
     expect(out).toMatch(/never books or pays/i);
+  });
+});
+
+describe("phone normalization (E.164 for Parks Canada)", () => {
+  it.each([
+    ["(647) 468-9893", "+16474689893"],
+    ["647-468-9893", "+16474689893"],
+    ["6474689893", "+16474689893"],
+    ["16474689893", "+16474689893"],
+    ["+1 587 986 5992", "+15879865992"],
+  ])("normalizes %s -> %s", (input, expected) => {
+    expect(normalizePhone(input)).toBe(expected);
   });
 });
 

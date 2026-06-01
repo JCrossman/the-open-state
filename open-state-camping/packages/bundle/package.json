@@ -1,6 +1,6 @@
 {
   "name": "@open-state/bundle",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "private": true,
   "type": "module",
   "description": "The Open State: Camping - local MCP bundle (.mcpb): anonymous search + booking completion for Parks Canada.",

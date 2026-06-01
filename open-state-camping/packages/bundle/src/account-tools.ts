@@ -260,6 +260,20 @@ function changedFields(args: Record<string, any>): string[] {
 }
 
 /**
+ * Normalize a phone number to E.164 (+1… for Canada/US), the format Parks
+ * Canada stores and requires — a raw "(647) 468-9893" or bare 10 digits is
+ * rejected with HTTP 400.
+ */
+export function normalizePhone(raw: string): string {
+  const trimmed = raw.trim();
+  const digits = trimmed.replace(/\D/g, "");
+  if (trimmed.startsWith("+")) return "+" + digits;
+  if (digits.length === 10) return "+1" + digits;
+  if (digits.length === 11 && digits.startsWith("1")) return "+" + digits;
+  return digits ? "+" + digits : trimmed;
+}
+
+/**
  * Build the exact profile DTO `POST /api/shopper` accepts (verified shape from a
  * live capture), sourcing values from the current profile and applying the
  * requested changes. Sends only the expected keys — posting the raw GET record
@@ -291,11 +305,11 @@ function toShopperUpdateDTO(
     boats: cur["boats"] ?? [],
     phoneNumbers: {
       primaryPhoneNumber: has("primary_phone")
-        ? args["primary_phone"]
+        ? normalizePhone(args["primary_phone"])
         : (phones["primaryPhoneNumber"] ?? null),
       primaryCountryCode: phones["primaryCountryCode"] ?? "CA",
       secondaryPhoneNumber: has("secondary_phone")
-        ? args["secondary_phone"]
+        ? normalizePhone(args["secondary_phone"])
         : (phones["secondaryPhoneNumber"] ?? null),
       secondaryCountryCode: has("secondary_phone")
         ? (phones["secondaryCountryCode"] ?? "CA")
