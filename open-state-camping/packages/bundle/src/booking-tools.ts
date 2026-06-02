@@ -14,6 +14,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
+  BOOKING_STAGES,
   buildBookingCart,
   newBookingIds,
   partySize,
@@ -109,18 +110,23 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
         );
       }
 
-      // Phase 2 — the citizen confirmed. Assemble the cart and commit it (holds the
-      // site and advances to payment), then hand off to their browser. We never pay.
+      // Phase 2 — the citizen confirmed. Drive the booking through the wizard's
+      // commit stages (hold → details → finalize) so the server validates the same
+      // progression a person clicking through would. Each stage re-commits the cart
+      // with the same client-minted ids. We stop before payment and never pay.
       const ids = newBookingIds();
-      const cart = buildBookingCart(request, ids, envelope);
-      try {
-        await provider.commitCart(cart, { isCompleted: false });
-      } catch (err) {
-        return text(
-          `I couldn't place the hold with Parks Canada.\n${
-            err instanceof Error ? err.message : String(err)
-          }\n\nNothing was reserved and nothing was charged.`,
-        );
+      for (const stage of BOOKING_STAGES) {
+        const cart = buildBookingCart(request, ids, envelope, stage);
+        try {
+          await provider.commitCart(cart, { isCompleted: false });
+        } catch (err) {
+          return text(
+            `I couldn't prepare the booking with Parks Canada (it failed at the ` +
+              `"${stage}" step).\n${err instanceof Error ? err.message : String(err)}\n\n` +
+              "Nothing was reserved and nothing was charged. The held site, if any, " +
+              "releases on its own.",
+          );
+        }
       }
 
       try {

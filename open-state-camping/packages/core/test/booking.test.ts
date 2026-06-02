@@ -128,6 +128,38 @@ describe("booking cart assembly — full pre-payment cart", () => {
   });
 });
 
+describe("booking cart assembly — wizard stages", () => {
+  const holdNV = fixture("commit-1-hold.json").cart.bookings[0].newVersion;
+  const detailsNV = fixture("commit-2-account.json").cart.bookings[0].newVersion;
+
+  it("the hold stage matches the captured first commit (stub occupant, no times/members)", () => {
+    const nv = buildBookingCart(request, ids, envelope, "hold").cart.bookings[0].newVersion;
+    expect(nv.occupant).toEqual(holdNV.occupant);
+    expect(nv.bookingMembers).toEqual([]);
+    expect(nv.checkInTime).toBeNull();
+    expect(nv.checkOutTime).toBeNull();
+    expect(typeof nv.completedDate).toBe("string"); // a timestamp, as captured
+  });
+
+  it("the details stage sends the full occupant projection (times set, no members)", () => {
+    // The captured account commit had a mid-edit, half-filled address (the citizen
+    // was still typing across screens). We send the complete projection — strictly
+    // more complete, and what the final commit needs anyway — not the transient form.
+    const nv = buildBookingCart(request, ids, envelope, "details").cart.bookings[0].newVersion;
+    expect(nv.occupant).toEqual(buildOccupant(envelope));
+    expect(nv.occupant).not.toEqual(detailsNV.occupant); // not the half-filled capture
+    expect(nv.bookingMembers).toEqual([]);
+    expect(nv.checkInTime).toBe("14:00");
+    expect(nv.checkOutTime).toBe("11:00");
+    expect(nv.completedDate).toBeNull();
+  });
+
+  it("the finalize stage adds the booking-holder member", () => {
+    const nv = buildBookingCart(request, ids, envelope, "finalize").cart.bookings[0].newVersion;
+    expect(nv.bookingMembers).toEqual(capturedNV.bookingMembers);
+  });
+});
+
 describe("booking ids", () => {
   it("mints four distinct GUIDs", () => {
     const ids = newBookingIds();

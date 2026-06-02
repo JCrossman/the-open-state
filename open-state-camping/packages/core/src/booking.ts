@@ -165,15 +165,45 @@ export function bookingHolderMember(envelope: ShopperEnvelope): Record<string, a
 }
 
 /**
- * Assemble the fully-populated, pre-payment `cart` object for `POST
- * /api/cart/commit`. This is the state the wizard reaches at the payment screen —
- * everything is filled in, nothing is paid. Committing it holds the site and
- * advances to payment; the citizen pays in their browser.
+ * The stub occupant the wizard sends on the very first commit (the hold), before
+ * the citizen's profile is loaded into the form: name + culture only, with empty
+ * contact/address/phone shapes. Replaced by the full projection at the next stage.
+ */
+export function minimalOccupant(envelope: ShopperEnvelope): Record<string, any> {
+  const p = envelope.currentVersion;
+  return {
+    contact: { email: "", contactName: "", phoneNumberCountryCode: null, phoneNumber: "" },
+    address: {},
+    allowMarketing: false,
+    phoneNumbers: {},
+    preferredCultureName: p["preferredCultureName"] ?? "en-CA",
+    firstName: p["firstName"] ?? "",
+    lastName: p["lastName"] ?? "",
+  };
+}
+
+/**
+ * The wizard's commit stages, in order. The platform's booking wizard re-commits
+ * the cart at each screen; replaying the same progression (rather than a single
+ * fully-populated commit) mirrors what the server validated step by step:
+ *  - `hold`     — place the hold (stub occupant, no check-in times, no members).
+ *  - `details`  — account/occupant/party screens (full occupant, check-in times).
+ *  - `finalize` — ready for payment (adds the booking-holder member).
+ */
+export type BookingStage = "hold" | "details" | "finalize";
+export const BOOKING_STAGES: readonly BookingStage[] = ["hold", "details", "finalize"];
+
+/**
+ * Assemble the `cart` object for `POST /api/cart/commit` at a given wizard stage.
+ * Defaults to `finalize` — the fully-populated, pre-payment cart (everything filled
+ * in, nothing paid). Committing the stages in order reaches the payment screen; the
+ * citizen pays in their browser.
  */
 export function buildBookingCart(
   request: BookingRequest,
   ids: BookingIds,
   envelope: ShopperEnvelope,
+  stage: BookingStage = "finalize",
 ): { cart: Record<string, any> } {
   const equipmentCategoryId = request.equipmentCategoryId ?? NON_GROUP_EQUIPMENT;
   const subEquipmentCategoryId = request.subEquipmentCategoryId ?? NON_GROUP_EQUIPMENT;
@@ -196,9 +226,10 @@ export function buildBookingCart(
     },
   };
 
+  const isHold = stage === "hold";
   const bookingNewVersion: Record<string, any> = {
     cartTransactionUid: ids.cartTransactionUid,
-    bookingMembers: [bookingHolderMember(envelope)],
+    bookingMembers: stage === "finalize" ? [bookingHolderMember(envelope)] : [],
     bookingVehicles: [],
     bookingBoats: [],
     bookingCapacityCategoryCounts: partyCapacityCounts(request.party),
@@ -212,10 +243,10 @@ export function buildBookingCart(
     releasePersonalInformation: false,
     equipmentCategoryId,
     subEquipmentCategoryId,
-    occupant: buildOccupant(envelope),
+    occupant: isHold ? minimalOccupant(envelope) : buildOccupant(envelope),
     requiresCheckout: false,
     bookingStatus: 0,
-    completedDate: null,
+    completedDate: isHold ? new Date().toISOString() : null,
     arrivalComment: "",
     entryPointResourceId: null,
     exitPointResourceId: null,
@@ -227,8 +258,8 @@ export function buildBookingCart(
     passExpiryDate: null,
     passNumber: "",
     resourceLocationId: request.resourceLocationId,
-    checkInTime: request.checkInTime ?? DEFAULT_CHECK_IN_TIME,
-    checkOutTime: request.checkOutTime ?? DEFAULT_CHECK_OUT_TIME,
+    checkInTime: isHold ? null : (request.checkInTime ?? DEFAULT_CHECK_IN_TIME),
+    checkOutTime: isHold ? null : (request.checkOutTime ?? DEFAULT_CHECK_OUT_TIME),
     deferredPayment: false,
   };
 
