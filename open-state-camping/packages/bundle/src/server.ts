@@ -13,6 +13,7 @@ import { ParksCanadaProvider } from "@open-state/core";
 import { configFromEnv } from "./config.js";
 import { registerTools } from "./tools.js";
 import { registerAccountTools } from "./account-tools.js";
+import { registerBookingTools } from "./booking-tools.js";
 import { loadSession, sessionAuthHeaders } from "./session/vault.js";
 
 import type { BundleConfig } from "./config.js";
@@ -44,6 +45,7 @@ export function createServer(): McpServer {
   });
   const server = createServerForProvider(provider, config);
   registerAccountTools(server, provider);
+  registerBookingTools(server, provider);
   return server;
 }
 

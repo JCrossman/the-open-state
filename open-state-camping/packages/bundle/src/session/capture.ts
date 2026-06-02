@@ -90,6 +90,32 @@ export async function captureSession(opts: CaptureOptions = {}): Promise<Session
 }
 
 /**
+ * Open the citizen's Chrome at their cart so they review the prepared booking and
+ * pay themselves. We assemble everything up to payment via the API; entering a
+ * card is the one step we never take for them (Constitution Art. 2). Uses the same
+ * persistent profile as sign-in, so the cart we built under their session is
+ * already there. The window is left open for them; we don't await its close.
+ */
+export async function openCheckout(
+  opts: CaptureOptions & { cartUrl?: string } = {},
+): Promise<void> {
+  const cartUrl = opts.cartUrl ?? "https://reservation.pc.gc.ca/cart";
+  const profileDir = opts.profileDir ?? join(defaultVaultDir(), "browser-profile");
+  const puppeteer = (await import("puppeteer-core")).default;
+  const browser = await puppeteer.launch({
+    channel: "chrome",
+    headless: false,
+    defaultViewport: null,
+    userDataDir: profileDir,
+    ignoreDefaultArgs: ["--enable-automation"],
+    args: ["--disable-blink-features=AutomationControlled", "--disable-infobars", "--start-maximized"],
+  });
+  const page = (await browser.pages())[0] ?? (await browser.newPage());
+  await page.goto(cartUrl, { waitUntil: "domcontentloaded" });
+  // Intentionally leave the browser open so the citizen can complete payment.
+}
+
+/**
  * Poll the app's own `userInfo` endpoint until it reports an authenticated
  * citizen. Logged-out responses are 401/empty; once signed in it returns the
  * account, which is our signal that the session cookies are good to capture.

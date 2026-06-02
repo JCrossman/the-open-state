@@ -295,6 +295,19 @@ export class ParksCanadaProvider {
     return this.client.updateShopper(profile);
   }
 
+  /** The raw GET /api/shopper envelope, needed to assemble a booking cart. */
+  getShopperEnvelope(): Promise<Record<string, any> | null> {
+    return this.client.getShopperEnvelope();
+  }
+
+  /** Commit a booking cart (after the citizen confirms; never past payment). */
+  commitCart(
+    cart: { cart: Record<string, any> },
+    opts: { isCompleted?: boolean; isSelfCheckIn?: boolean } = {},
+  ): Promise<unknown> {
+    return this.client.commitCart(cart, opts);
+  }
+
   async bookingUrl(opts: {
     campgroundId: string;
     startDate: ISODate;
