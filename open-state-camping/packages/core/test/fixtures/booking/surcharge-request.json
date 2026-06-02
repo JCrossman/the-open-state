@@ -1,0 +1,16 @@
+{
+  "bookingResourceLocationId": -2147483646,
+  "webResourceLocationId": -2147483531,
+  "resourceBlockerItems": [
+    {
+      "blockerUid": "00000000-0000-0000-0000-000000000007",
+      "resourceId": -2147474730,
+      "resourceLocationId": -2147483646,
+      "startDate": "2026-07-22",
+      "endDate": "2026-07-23"
+    }
+  ],
+  "bookingModel": 0,
+  "bookingStartDate": "2026-07-22",
+  "bookingUid": "00000000-0000-0000-0000-000000000006"
+}

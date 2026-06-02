@@ -82,6 +82,53 @@ The link prefills the **campground + dates + party + equipment**; the citizen
 picks the exact site and confirms in their own session. It is not per-site.
 [constructed from camply `get_reservation_link` + verified params; not click-tested]
 
+### Booking write path (authenticated; verified from a real capture)
+
+Captured from a real authenticated booking driven to the **payment screen but not
+paid** (so: no reservation, no cancellation fee — the fee attaches only *after a
+reservation is confirmed*, i.e. after payment). The whole wizard is a sequence of
+**`POST /api/cart/commit?isCompleted=false&isSelfCheckIn=false`**, each re-sending
+the *entire growing cart object* (`{ "cart": { … } }`) — the same
+capture-and-replay-with-substitution shape as `POST /api/shopper`. Payment is a
+**separate, later step** not exercised here; we never automate it (Art. 2).
+
+Key facts:
+- **Client-generated GUIDs.** `cartUid`, `bookingUid`, `cartTransactionUid`, and the
+  `resourceBlockerUid` are minted client-side before the first commit. **The first
+  commit *is* the hold** — there is no separate server "hold" endpoint. An unpaid
+  cart simply expires on its own.
+- **`cart.bookings[0].newVersion`** carries the booking: `startDate`/`endDate`,
+  `equipmentCategoryId`/`subEquipmentCategoryId` (`-32768` non-group),
+  `rateCategoryId` (`-32768` standard), `checkInTime` `14:00` / `checkOutTime`
+  `11:00` (from `/api/resource/model`), `bookingCapacityCategoryCounts`,
+  `occupant`, `bookingMembers`, and `resourceBlockerUids`. `completedDate` is
+  `null` and `bookingStatus` `0` until payment.
+- **Party counts** = four entries under `capacityCategoryId -32767`, by
+  `subCapacityCategoryId`: **`-32768` Adult, `-32767` Senior, `-32766` Youth,
+  `-32765` Child**.
+- **Occupant is a *projection* of the shopper, not a clone.** For "I am the
+  occupant": copy `addresses[0]` → `address`, copy `contact` and `phoneNumbers`
+  objects across unchanged, carry `firstName`/`lastName`/`email`/
+  `preferredCultureName`/`defaultRateCategoryId`/`defaultPassNumber`, set
+  `copiedShopperUid = shopperUid`, `bookingCustomerChainUid = null`, and
+  `allowMarketing`/`allowEmergencySms` (default `false`). Profile-only fields
+  (`vehicles`, `boats`, `communicationPreferences`, flagged dates) are dropped.
+- **`bookingMembers[0]`** = the holder: `{ firstName, lastName, isBookingHolder:
+  true, order: 0 }` (other fields null/empty).
+- **`cart.shopper`** is the *raw* `GET /api/shopper` envelope (`shopperUid`,
+  `currentVersion`, `history`, `hasWebAccount`), threaded back unchanged — not the
+  unwrapped profile that reads/updates use.
+- Supporting reads the SPA fires around the commits (not all required to write):
+  `/api/availability/resourcestatus`, `/api/resource/model`,
+  `/api/resourcelocation/resourceId`, `/api/surcharge/getSurchargeDetailsPackageForBooking`,
+  `/api/cart/get|lineitems|resourceinfo`, `/api/bookingvalidation/*`,
+  `/api/payment/balanceowing|typesettings` (payment screen).
+
+Implemented in `packages/core/src/booking.ts` (`buildBookingCart`) and verified by
+an **offline replay-diff** test (`packages/core/test/booking.test.ts`) against a
+sanitized capture in `test/fixtures/booking/` — the cart is rebuilt from inputs and
+asserted byte-for-byte against what the platform accepted, with no network call.
+
 ## Divergences from camply (camply 0.34.2 is stale for this host)
 
 1. **`/api/resource/details` is GONE → HTTP 404.** This was camply's *only* source

@@ -18,6 +18,20 @@ export {
   type SearchParkAvailabilityOptions,
 } from "./parks-canada.js";
 export {
+  newBookingIds,
+  partyCapacityCounts,
+  partySize,
+  buildOccupant,
+  bookingHolderMember,
+  buildBookingCart,
+  CAPACITY_CATEGORY_ID,
+  CAPACITY_SUB,
+  type PartyCounts,
+  type BookingRequest,
+  type BookingIds,
+  type ShopperEnvelope,
+} from "./booking.js";
+export {
   allowedNotifyHosts,
   validateNotifyTarget,
   generateChannel,

@@ -260,6 +260,34 @@ export class GoingToCampClient {
   }
 
   /**
+   * The raw `GET /api/shopper` envelope — `{ shopperUid, currentVersion, history,
+   * hasWebAccount, … }` — as the platform returns it. `getShopper()` unwraps this
+   * to the flat profile for reads/updates; the booking cart needs the whole
+   * envelope threaded back into `cart.shopper`, so we expose it unmodified here.
+   */
+  async getShopperEnvelope(): Promise<Record<string, any> | null> {
+    const data = (await this.get("/api/shopper")) as unknown;
+    return data && typeof data === "object" ? (data as Record<string, any>) : null;
+  }
+
+  /**
+   * Commit a booking cart. The wizard re-commits the whole cart object at each
+   * step; `isCompleted=false` advances toward (but never past) payment — payment
+   * is a separate, citizen-driven step we never automate (Constitution Art. 2).
+   * State-changing — only after the citizen confirms.
+   */
+  async commitCart(
+    cart: { cart: Record<string, any> },
+    opts: { isCompleted?: boolean; isSelfCheckIn?: boolean } = {},
+  ): Promise<unknown> {
+    const params = new URLSearchParams({
+      isCompleted: String(opts.isCompleted ?? false),
+      isSelfCheckIn: String(opts.isSelfCheckIn ?? false),
+    });
+    return this.post(`/api/cart/commit?${params.toString()}`, cart);
+  }
+
+  /**
    * Per-day availability for each site over the stay window. Walks the
    * campground's map tree (root → child maps); one request per map, never more
    * than the loop guard. Read-only.
