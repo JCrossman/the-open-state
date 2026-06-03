@@ -21,6 +21,10 @@ import { NON_GROUP_EQUIPMENT } from "./constants.js";
 const DEFAULT_RATE_CATEGORY_ID = -32768;
 const DEFAULT_CHECK_IN_TIME = "14:00";
 const DEFAULT_CHECK_OUT_TIME = "11:00";
+/** The "online" self-service terminal id (verified constant in the capture). */
+const ONLINE_TERMINAL_LOCATION_ID = -2147483647;
+/** Empty/unset UUID — for fields the server assigns from the session. */
+const ZERO_UUID = "00000000-0000-0000-0000-000000000000";
 
 /** Party capacity sub-categories (verified): the four age bands the wizard shows. */
 export const CAPACITY_CATEGORY_ID = -32767;
@@ -207,6 +211,7 @@ export function buildBookingCart(
 ): { cart: Record<string, any> } {
   const equipmentCategoryId = request.equipmentCategoryId ?? NON_GROUP_EQUIPMENT;
   const subEquipmentCategoryId = request.subEquipmentCategoryId ?? NON_GROUP_EQUIPMENT;
+  const now = new Date().toISOString();
 
   const resourceBlocker = {
     blockerType: 0,
@@ -285,12 +290,25 @@ export function buildBookingCart(
     referenceNumberSuffix: "",
     newTransaction: {
       cartTransactionUid: ids.cartTransactionUid,
-      cartUid: "00000000-0000-0000-0000-000000000000",
+      cartUid: ZERO_UUID,
+      completeDate: null,
+      createDate: now,
+      editBookingLock: false,
+      lastEditDate: now,
+      referenceNumberPrefix: "",
+      referenceNumberSuffix: "",
+      // Server-authoritative session context: the online flow's terminal is a
+      // fixed id; shift/user are assigned from the authenticated session, so we
+      // send the zero UUID ("unset") rather than a fabricated value. Included for
+      // structural completeness — a missing field can 400 the model binder.
+      shiftUid: ZERO_UUID,
       shopperUid: envelope.shopperUid,
       status: 1,
+      terminalLocationId: ONLINE_TERMINAL_LOCATION_ID,
       transactionBookings: [],
       transactionSales: [],
       transactionShipments: [],
+      userUid: ZERO_UUID,
     },
     transactionDrafts: [],
     transactionHistory: [],

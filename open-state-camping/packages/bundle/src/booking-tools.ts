@@ -122,9 +122,12 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
         } catch (err) {
           return text(
             `I couldn't prepare the booking with Parks Canada (it failed at the ` +
-              `"${stage}" step).\n${err instanceof Error ? err.message : String(err)}\n\n` +
-              "Nothing was reserved and nothing was charged. The held site, if any, " +
-              "releases on its own.",
+              `"${stage}" step). Nothing was reserved and nothing was charged; any ` +
+              `held site releases on its own.\n\n` +
+              `Parks Canada's exact response (please share this verbatim so it can ` +
+              `be fixed):\n${err instanceof Error ? err.message : String(err)}\n\n` +
+              `The cart I sent at the "${stage}" step (your personal details ` +
+              `masked):\n${maskedCart(cart)}`,
           );
         }
       }
@@ -151,6 +154,30 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
   );
 }
 
+/**
+ * Masked dump of the booking cart for diagnostics: keeps the structure (which is
+ * what 400s are about) but redacts personal values. Mirrors the masked-payload
+ * approach that cracked the profile-update 400s.
+ */
+function maskedCart(cart: { cart: Record<string, any> }): string {
+  const PII = new Set([
+    "firstName", "lastName", "email", "primaryPhoneNumber", "secondaryPhoneNumber",
+    "streetAddress", "city", "contactName", "phoneNumber", "region", "regionCode",
+    "unit", "postalCode",
+  ]);
+  const mask = (v: any, k?: string): any => {
+    if (k && PII.has(k)) {
+      return v == null ? v : typeof v === "string" ? `<set:${v.length}chars>` : "<masked>";
+    }
+    if (Array.isArray(v)) return v.map((x) => mask(x));
+    if (v && typeof v === "object") {
+      return Object.fromEntries(Object.entries(v).map(([kk, vv]) => [kk, mask(vv, kk)]));
+    }
+    return v;
+  };
+  return JSON.stringify(mask(cart), null, 2);
+}
+
 /** Plain-language summary of what will be booked. */
 function bookingSummary(
   request: BookingRequest,
@@ -169,7 +196,7 @@ function bookingSummary(
   return [
     "Here's the booking I'll prepare:",
     `- Site: ${request.resourceId} (campground ${request.resourceLocationId})`,
-    `- Dates: ${request.startDate} to ${request.endDate}` +
+    `- Dates: ${withWeekday(request.startDate)} to ${withWeekday(request.endDate)}` +
       (nights ? ` (${nights} night${nights === 1 ? "" : "s"})` : ""),
     `- Party: ${partyParts.join(", ") || "1 adult"}`,
     `- Reservation for: ${who}`,
@@ -181,4 +208,17 @@ function nightsBetween(start: string, end: string): number {
   const b = Date.parse(end);
   if (Number.isNaN(a) || Number.isNaN(b)) return 0;
   return Math.max(0, Math.round((b - a) / 86_400_000));
+}
+
+/**
+ * Render an ISO date with its weekday, e.g. "Wed, 2026-06-17". The assistant can
+ * confabulate the day of week from a bare date; spelling it out keeps the
+ * confirmation grounded in the real calendar (parsed UTC to avoid TZ drift).
+ */
+function withWeekday(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return iso;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  const day = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getUTCDay()];
+  return `${day}, ${iso}`;
 }
