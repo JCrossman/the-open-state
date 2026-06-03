@@ -24,6 +24,8 @@ export {
   buildOccupant,
   minimalOccupant,
   bookingHolderMember,
+  buildBooking,
+  buildResourceBlocker,
   buildBookingCart,
   BOOKING_STAGES,
   CAPACITY_CATEGORY_ID,

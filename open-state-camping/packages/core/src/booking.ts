@@ -21,10 +21,6 @@ import { NON_GROUP_EQUIPMENT } from "./constants.js";
 const DEFAULT_RATE_CATEGORY_ID = -32768;
 const DEFAULT_CHECK_IN_TIME = "14:00";
 const DEFAULT_CHECK_OUT_TIME = "11:00";
-/** The "online" self-service terminal id (verified constant in the capture). */
-const ONLINE_TERMINAL_LOCATION_ID = -2147483647;
-/** Empty/unset UUID — for fields the server assigns from the session. */
-const ZERO_UUID = "00000000-0000-0000-0000-000000000000";
 
 /** Party capacity sub-categories (verified): the four age bands the wizard shows. */
 export const CAPACITY_CATEGORY_ID = -32767;
@@ -66,16 +62,18 @@ export interface BookingRequest {
 export interface BookingIds {
   cartUid: string;
   bookingUid: string;
-  cartTransactionUid: string;
   resourceBlockerUid: string;
 }
 
-/** Mint a fresh set of cart GUIDs. */
+/**
+ * Mint the client-generated cart GUIDs. `cartUid` is used to start the server
+ * transaction (GET /api/cart/newtransaction); the server assigns the
+ * `cartTransactionUid`, so we don't generate that one.
+ */
 export function newBookingIds(): BookingIds {
   return {
     cartUid: randomUUID(),
     bookingUid: randomUUID(),
-    cartTransactionUid: randomUUID(),
     resourceBlockerUid: randomUUID(),
   };
 }
@@ -197,32 +195,29 @@ export function minimalOccupant(envelope: ShopperEnvelope): Record<string, any> 
 export type BookingStage = "hold" | "details" | "finalize";
 export const BOOKING_STAGES: readonly BookingStage[] = ["hold", "details", "finalize"];
 
-/**
- * Assemble the `cart` object for `POST /api/cart/commit` at a given wizard stage.
- * Defaults to `finalize` — the fully-populated, pre-payment cart (everything filled
- * in, nothing paid). Committing the stages in order reaches the payment screen; the
- * citizen pays in their browser.
- */
-export function buildBookingCart(
-  request: BookingRequest,
-  ids: BookingIds,
-  envelope: ShopperEnvelope,
-  stage: BookingStage = "finalize",
-): { cart: Record<string, any> } {
-  const equipmentCategoryId = request.equipmentCategoryId ?? NON_GROUP_EQUIPMENT;
-  const subEquipmentCategoryId = request.subEquipmentCategoryId ?? NON_GROUP_EQUIPMENT;
-  const now = new Date().toISOString();
+/** Identify the booking within a specific server-issued transaction. */
+interface BookingRefs {
+  bookingUid: string;
+  cartUid: string;
+  cartTransactionUid: string;
+  resourceBlockerUid: string;
+}
 
-  const resourceBlocker = {
+/** The site hold (resource blocker) for the chosen site and dates. */
+export function buildResourceBlocker(
+  request: BookingRequest,
+  refs: BookingRefs,
+): Record<string, any> {
+  return {
     blockerType: 0,
-    cartUid: ids.cartUid,
-    resourceBlockerUid: ids.resourceBlockerUid,
-    bookingUid: ids.bookingUid,
+    cartUid: refs.cartUid,
+    resourceBlockerUid: refs.resourceBlockerUid,
+    bookingUid: refs.bookingUid,
     groupHoldUid: "",
     isReservation: true,
     newVersion: {
       creationDate: new Date().toISOString(),
-      cartTransactionUid: ids.cartTransactionUid,
+      cartTransactionUid: refs.cartTransactionUid,
       startDate: request.startDate,
       endDate: request.endDate,
       resourceId: request.resourceId,
@@ -230,16 +225,26 @@ export function buildBookingCart(
       status: 0,
     },
   };
+}
 
+/** The booking object (one site, one stay) added to the cart's `bookings`. */
+export function buildBooking(
+  request: BookingRequest,
+  refs: BookingRefs,
+  envelope: ShopperEnvelope,
+  stage: BookingStage,
+): Record<string, any> {
+  const equipmentCategoryId = request.equipmentCategoryId ?? NON_GROUP_EQUIPMENT;
+  const subEquipmentCategoryId = request.subEquipmentCategoryId ?? NON_GROUP_EQUIPMENT;
   const isHold = stage === "hold";
-  const bookingNewVersion: Record<string, any> = {
-    cartTransactionUid: ids.cartTransactionUid,
+  const newVersion: Record<string, any> = {
+    cartTransactionUid: refs.cartTransactionUid,
     bookingMembers: stage === "finalize" ? [bookingHolderMember(envelope)] : [],
     bookingVehicles: [],
     bookingBoats: [],
     bookingCapacityCategoryCounts: partyCapacityCounts(request.party),
     rateCategoryId: request.rateCategoryId ?? DEFAULT_RATE_CATEGORY_ID,
-    resourceBlockerUids: [ids.resourceBlockerUid],
+    resourceBlockerUids: [refs.resourceBlockerUid],
     resourceNonSpecificBlockerUids: [],
     resourceZoneBlockerUids: [],
     resourceZoneEntryBlockerUids: [],
@@ -267,66 +272,55 @@ export function buildBookingCart(
     checkOutTime: isHold ? null : (request.checkOutTime ?? DEFAULT_CHECK_OUT_TIME),
     deferredPayment: false,
   };
-
-  const booking = {
-    bookingUid: ids.bookingUid,
-    cartUid: ids.cartUid,
+  return {
+    bookingUid: refs.bookingUid,
+    cartUid: refs.cartUid,
     bookingCategoryId: 0,
     bookingModel: 0,
-    newVersion: bookingNewVersion,
-    createTransactionUid: ids.cartTransactionUid,
+    newVersion,
+    createTransactionUid: refs.cartTransactionUid,
     currentVersion: null,
     history: [],
     drafts: [],
     referenceNumberPostfix: "",
   };
+}
 
-  const cart: Record<string, any> = {
-    cartUid: ids.cartUid,
-    createTransactionUid: ids.cartTransactionUid,
-    shopperUid: envelope.shopperUid,
-    groupUid: null,
-    referenceNumberPrefix: "",
-    referenceNumberSuffix: "",
-    newTransaction: {
-      cartTransactionUid: ids.cartTransactionUid,
-      cartUid: ZERO_UUID,
-      completeDate: null,
-      createDate: now,
-      editBookingLock: false,
-      lastEditDate: now,
-      referenceNumberPrefix: "",
-      referenceNumberSuffix: "",
-      // Server-authoritative session context: the online flow's terminal is a
-      // fixed id; shift/user are assigned from the authenticated session, so we
-      // send the zero UUID ("unset") rather than a fabricated value. Included for
-      // structural completeness — a missing field can 400 the model binder.
-      shiftUid: ZERO_UUID,
-      shopperUid: envelope.shopperUid,
-      status: 1,
-      terminalLocationId: ONLINE_TERMINAL_LOCATION_ID,
-      transactionBookings: [],
-      transactionSales: [],
-      transactionShipments: [],
-      userUid: ZERO_UUID,
-    },
-    transactionDrafts: [],
-    transactionHistory: [],
-    giftCards: [],
-    sales: [],
-    bookings: [booking],
-    shipments: [],
-    groupHold: null,
-    paymentGroups: [],
-    gatewayPaymentSessions: [],
-    lineItems: [],
-    resourceBlockers: [resourceBlocker],
-    resourceNonSpecificBlockers: [],
-    resourceZoneBlockers: [],
-    resourceZoneEntryBlockers: [],
-    waitlistApplications: [],
-    shopper: envelope,
+/**
+ * Add the booking to the server-issued cart and return it ready to commit.
+ *
+ * `base` is the real cart from `GET /api/cart/newtransaction` — it already carries
+ * the server's transaction context (`cartTransactionUid`, `shiftUid`, `userUid`,
+ * `referenceNumberPrefix`, the online terminal). We mutate *that* object (attach
+ * the shopper, the booking, and the hold) rather than fabricating a cart, because
+ * fabricating the transaction is rejected with HTTP 400. Mirrors the SPA, which
+ * gets a new transaction, populates the shopper, then adds the booking and commits.
+ */
+export function buildBookingCart(
+  base: Record<string, any>,
+  request: BookingRequest,
+  ids: BookingIds,
+  envelope: ShopperEnvelope,
+  stage: BookingStage = "finalize",
+): { cart: Record<string, any> } {
+  const cart = base;
+  const cartUid = (cart["cartUid"] as string) ?? ids.cartUid;
+  const cartTransactionUid =
+    (cart["newTransaction"]?.["cartTransactionUid"] as string) ??
+    (cart["createTransactionUid"] as string);
+
+  // Attach the shopper, mirroring the SPA's populateShopperOnCart.
+  cart["shopper"] = envelope;
+  cart["shopperUid"] = envelope.shopperUid;
+  if (cart["newTransaction"]) cart["newTransaction"]["shopperUid"] = envelope.shopperUid;
+
+  const refs: BookingRefs = {
+    bookingUid: ids.bookingUid,
+    cartUid,
+    cartTransactionUid,
+    resourceBlockerUid: ids.resourceBlockerUid,
   };
-
+  cart["bookings"] = [buildBooking(request, refs, envelope, stage)];
+  cart["resourceBlockers"] = [buildResourceBlocker(request, refs)];
   return { cart };
 }

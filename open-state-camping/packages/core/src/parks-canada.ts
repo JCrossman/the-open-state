@@ -300,6 +300,11 @@ export class ParksCanadaProvider {
     return this.client.getShopperEnvelope();
   }
 
+  /** Start a server-issued cart transaction (the real cart skeleton to book into). */
+  newCartTransaction(cartUid: string): Promise<Record<string, any>> {
+    return this.client.newCartTransaction(cartUid);
+  }
+
   /** Commit a booking cart (after the citizen confirms; never past payment). */
   commitCart(
     cart: { cart: Record<string, any> },

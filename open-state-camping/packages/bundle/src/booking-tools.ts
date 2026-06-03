@@ -117,13 +117,24 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
         );
       }
 
-      // Phase 2 — the citizen confirmed. Drive the booking through the wizard's
-      // commit stages (hold → details → finalize) so the server validates the same
-      // progression a person clicking through would. Each stage re-commits the cart
-      // with the same client-minted ids. We stop before payment and never pay.
+      // Phase 2 — the citizen confirmed. First get a real, server-issued cart
+      // transaction (it carries the shift/user/reference context the commit
+      // requires; fabricating it is rejected with a 400), then drive the booking
+      // through the wizard's commit stages (hold → details → finalize). We stop
+      // before payment and never pay.
       const ids = newBookingIds();
+      let base: Record<string, any>;
+      try {
+        base = await provider.newCartTransaction(ids.cartUid);
+      } catch (err) {
+        return text(
+          `I couldn't start a booking with Parks Canada.\n${
+            err instanceof Error ? err.message : String(err)
+          }\n\nNothing was reserved and nothing was charged.`,
+        );
+      }
       for (const stage of BOOKING_STAGES) {
-        const cart = buildBookingCart(request, ids, envelope, stage);
+        const cart = buildBookingCart(base, request, ids, envelope, stage);
         try {
           await provider.commitCart(cart, { isCompleted: false });
         } catch (err) {

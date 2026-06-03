@@ -36,9 +36,13 @@ const envelope: ShopperEnvelope = captured.shopper;
 const ids: BookingIds = {
   cartUid: captured.cartUid,
   bookingUid: capturedBooking.bookingUid,
-  cartTransactionUid: capturedBooking.createTransactionUid,
   resourceBlockerUid: captured.resourceBlockers[0].resourceBlockerUid,
 };
+
+/** A fresh copy of the server-issued cart skeleton to assemble the booking into
+ *  (buildBookingCart mutates it). The captured cart carries the real
+ *  newTransaction, exactly what GET /api/cart/newtransaction returns live. */
+const baseCart = (): Record<string, any> => structuredClone(captured);
 const request: BookingRequest = {
   resourceId: captured.resourceBlockers[0].newVersion.resourceId,
   resourceLocationId: capturedNV.resourceLocationId,
@@ -83,7 +87,7 @@ describe("booking cart assembly — occupant projection", () => {
 });
 
 describe("booking cart assembly — full pre-payment cart", () => {
-  const { cart } = buildBookingCart(request, ids, envelope);
+  const { cart } = buildBookingCart(baseCart(), request, ids, envelope);
   const nv = cart.bookings[0].newVersion;
 
   it("reproduces the booking newVersion the platform accepted (minus server-accrued state)", () => {
@@ -133,7 +137,7 @@ describe("booking cart assembly — wizard stages", () => {
   const detailsNV = fixture("commit-2-account.json").cart.bookings[0].newVersion;
 
   it("the hold stage matches the captured first commit (stub occupant, no times/members)", () => {
-    const nv = buildBookingCart(request, ids, envelope, "hold").cart.bookings[0].newVersion;
+    const nv = buildBookingCart(baseCart(), request, ids, envelope, "hold").cart.bookings[0].newVersion;
     expect(nv.occupant).toEqual(holdNV.occupant);
     expect(nv.bookingMembers).toEqual([]);
     expect(nv.checkInTime).toBeNull();
@@ -145,7 +149,7 @@ describe("booking cart assembly — wizard stages", () => {
     // The captured account commit had a mid-edit, half-filled address (the citizen
     // was still typing across screens). We send the complete projection — strictly
     // more complete, and what the final commit needs anyway — not the transient form.
-    const nv = buildBookingCart(request, ids, envelope, "details").cart.bookings[0].newVersion;
+    const nv = buildBookingCart(baseCart(), request, ids, envelope, "details").cart.bookings[0].newVersion;
     expect(nv.occupant).toEqual(buildOccupant(envelope));
     expect(nv.occupant).not.toEqual(detailsNV.occupant); // not the half-filled capture
     expect(nv.bookingMembers).toEqual([]);
@@ -155,18 +159,31 @@ describe("booking cart assembly — wizard stages", () => {
   });
 
   it("the finalize stage adds the booking-holder member", () => {
-    const nv = buildBookingCart(request, ids, envelope, "finalize").cart.bookings[0].newVersion;
+    const nv = buildBookingCart(baseCart(), request, ids, envelope, "finalize").cart.bookings[0].newVersion;
     expect(nv.bookingMembers).toEqual(capturedNV.bookingMembers);
   });
 });
 
 describe("booking ids", () => {
-  it("mints four distinct GUIDs", () => {
+  it("mints three distinct client GUIDs (the server assigns the transaction id)", () => {
     const ids = newBookingIds();
     const values = Object.values(ids);
-    expect(new Set(values).size).toBe(4);
+    expect(new Set(values).size).toBe(3);
     for (const v of values) {
       expect(v).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
     }
+  });
+});
+
+describe("booking cart assembly — uses the server transaction", () => {
+  it("threads the server-issued cartTransactionUid into the booking, not a client guess", () => {
+    const base = baseCart();
+    const serverTxn = base["newTransaction"]["cartTransactionUid"];
+    const { cart } = buildBookingCart(base, request, ids, envelope, "finalize");
+    expect(cart.bookings[0].createTransactionUid).toBe(serverTxn);
+    expect(cart.bookings[0].newVersion.cartTransactionUid).toBe(serverTxn);
+    expect(cart.resourceBlockers[0].newVersion.cartTransactionUid).toBe(serverTxn);
+    // the server's transaction context is preserved, not overwritten
+    expect(cart.newTransaction.cartTransactionUid).toBe(serverTxn);
   });
 });

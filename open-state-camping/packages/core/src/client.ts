@@ -282,6 +282,24 @@ export class GoingToCampClient {
   }
 
   /**
+   * Start a new cart transaction. The platform initializes the transaction
+   * server-side (assigning `cartTransactionUid`, `shiftUid`, `userUid`,
+   * `referenceNumberPrefix`, the online terminal id, …) and returns the cart
+   * skeleton. The booking is then added to *this* real cart and committed —
+   * fabricating the transaction ourselves is rejected with a bare HTTP 400.
+   * Mirrors the SPA's `initializeNewCartTransaction` (GET /api/cart/newtransaction).
+   */
+  async newCartTransaction(cartUid: string): Promise<Record<string, any>> {
+    const data = (await this.get("/api/cart/newtransaction", { cartUid })) as unknown;
+    if (!data || typeof data !== "object") {
+      throw new UpstreamError(
+        "The Parks Canada booking system did not start a cart transaction.",
+      );
+    }
+    return data as Record<string, any>;
+  }
+
+  /**
    * Commit a booking cart. The wizard re-commits the whole cart object at each
    * step; `isCompleted=false` advances toward (but never past) payment — payment
    * is a separate, citizen-driven step we never automate (Constitution Art. 2).
