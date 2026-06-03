@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "open-state-camping",
   "display_name": "The Open State: Camping",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "Find and book Parks Canada campsites in plain language, accessibly — from your own machine.",
   "long_description": "An independent, public-interest assistive tool. It searches Parks Canada campsite availability in plain language, puts accessibility first, and runs entirely on your own device so your searches come from your own connection. It is not operated by or endorsed by Parks Canada. It never stores your government login and never books on its own — you confirm everything yourself.",
   "author": {
@@ -41,7 +41,7 @@
     },
     {
       "name": "prepare_booking_url",
-      "description": "Prepare a Parks Canada booking link you open and confirm yourself."
+      "description": "Fallback only — prefer prepare_booking, which completes the reservation up to payment. Use this link only if prepare_booking can't be used."
     },
     {
       "name": "connect_account",
@@ -69,7 +69,7 @@
     },
     {
       "name": "prepare_booking",
-      "description": "Prepare a campsite reservation to the payment screen; you review and pay in your own browser. Nothing is held or charged until you confirm and pay."
+      "description": "Book or reserve a campsite: completes the reservation through Parks Canada up to the payment screen, then opens your cart so you review and pay. Use this to book — not a website link. Nothing is held or charged until you pay."
     },
     {
       "name": "debug_account_shape",

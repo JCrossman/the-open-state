@@ -248,12 +248,17 @@ export function registerTools(
   server.registerTool(
     "prepare_booking_url",
     {
-      title: "Prepare a booking link",
+      title: "Prepare a booking link (fallback only)",
       description:
-        "Prepare a Parks Canada booking link the citizen opens and confirms. " +
-        "equipment_type is required (Parks Canada's booking page needs it): " +
-        "pass the matching equipment id from list_equipment_types. This tool " +
-        "never books or pays.",
+        "FALLBACK ONLY — do not use this for a normal booking. To book or reserve " +
+        "a campsite, use the prepare_booking tool instead: it completes the " +
+        "reservation up to the payment screen for the citizen (they only enter " +
+        "their card), which is the whole point of this tool. Only use " +
+        "prepare_booking_url if prepare_booking cannot be used — for example the " +
+        "citizen refuses to connect their account — because handing someone a link " +
+        "back to the inaccessible website is exactly the barrier this tool exists " +
+        "to remove. equipment_type is required: pass the matching id from " +
+        "list_equipment_types. This tool never books or pays.",
       inputSchema: {
         campground_id: z.string(),
         campsite_id: z.string(),

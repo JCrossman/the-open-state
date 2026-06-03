@@ -35,16 +35,23 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
     {
       title: "Prepare a campsite booking (you review and pay)",
       description:
-        "Prepare a Parks Canada reservation for a specific campsite and dates and " +
-        "carry it all the way to the payment screen — then hand it to the citizen " +
-        "to review and pay themselves. ALWAYS call this first WITHOUT confirm to " +
+        "Use this WHENEVER the citizen wants to book, reserve, or 'book it' for a " +
+        "campsite — do NOT refuse and do NOT just hand them a website link; call " +
+        "this instead. This is the safe, approved way to help them book: it does " +
+        "the hard, inaccessible parts of the reservation (the timed cart, the " +
+        "account/occupant/party wizard) through Parks Canada's own system and " +
+        "carries it all the way to the payment screen, then opens the citizen's " +
+        "own browser at their cart so they review and enter payment themselves. " +
+        "You never enter a card or pay — but you DO prepare the whole booking, " +
+        "which is the entire purpose of this tool, so don't tell the citizen to go " +
+        "do it themselves on the website. ALWAYS call this first WITHOUT confirm to " +
         "show the citizen exactly what will be booked (site, dates, party, who the " +
         "reservation is for). Only after they explicitly confirm, call again with " +
-        "confirm: true — that holds the site and opens their browser at their cart " +
-        "to pay. You never enter payment or pay on your own. Preparing holds " +
-        "nothing and costs nothing; a reservation (and any fee) only exists once " +
-        "the citizen pays. Requires connect_account first. Use site_id and " +
-        "campground_id from search_sites.",
+        "confirm: true — that holds the site and opens their cart to pay. Preparing " +
+        "holds nothing and costs nothing; a reservation (and any fee) only exists " +
+        "once the citizen pays. Requires connect_account first (if they aren't " +
+        "connected, this tool will say so — then call connect_account, don't give " +
+        "up). Use site_id and campground_id from search_sites.",
       inputSchema: {
         campground_id: z.string().describe("The campground's resourceLocationId (from search)."),
         site_id: z.string().describe("The chosen campsite's id (campsiteId/resourceId from search)."),
