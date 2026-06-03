@@ -103,6 +103,21 @@ describe("ParksCanadaProvider — search", () => {
     expect(types.every((t) => t.equipmentId && t.name)).toBe(true);
   });
 
+  it("offers only frontcountry equipment, not backcountry types", async () => {
+    // The platform's /api/equipment has a frontcountry category (Small/Medium/
+    // Large Tent, …) and a separate Backcountry category (Single Tent, 2 Tents, …).
+    // We search frontcountry, so a backcountry type would silently yield zero.
+    const types = await makeProvider().listEquipmentTypes("14");
+    const names = types.map((t) => t.name);
+    expect(names).toContain("Small Tent");
+    expect(names).not.toContain("Single Tent");
+    expect(names.some((n) => /^\d+ Tents$/.test(n))).toBe(false);
+  });
+
+  it("rejects a backcountry equipment word instead of silently returning nothing", async () => {
+    await expect(search({ equipmentType: "single tent" })).rejects.toThrow(InvalidInputError);
+  });
+
   it("returns sites with accessibility surfaced, accessible first", async () => {
     const sites = await search();
     expect(sites.length).toBeGreaterThan(0);

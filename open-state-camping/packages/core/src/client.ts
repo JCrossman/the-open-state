@@ -179,13 +179,24 @@ export class GoingToCampClient {
     return out;
   }
 
-  /** Equipment types: per-area `subEquipmentCategoryId` + name. */
+  /**
+   * Frontcountry equipment types: per-area `subEquipmentCategoryId` + name.
+   *
+   * `/api/equipment` returns two categories — the frontcountry "Equipment"
+   * category (`NON_GROUP_EQUIPMENT`, e.g. Small/Medium/Large Tent, Van, Trailers)
+   * and a separate "Backcountry" category (Single Tent, 2 Tents, …). This tool
+   * searches **frontcountry** campsites and always queries availability with the
+   * frontcountry `equipmentCategoryId`, so we only surface that category's types.
+   * Listing the backcountry types would let a frontcountry search be filtered by a
+   * sub-type no frontcountry site uses, yielding a misleading "nothing available".
+   */
   async listEquipmentTypes(): Promise<EquipmentRecord[]> {
     const data = (await this.get("/api/equipment")) as
       | Array<Record<string, any>>
       | null;
     const out: EquipmentRecord[] = [];
     for (const category of data ?? []) {
+      if (category["equipmentCategoryId"] !== NON_GROUP_EQUIPMENT) continue;
       for (const sub of category["subEquipmentCategories"] ?? []) {
         out.push({
           equipmentId: sub["subEquipmentCategoryId"],
