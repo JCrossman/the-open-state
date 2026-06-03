@@ -18,6 +18,18 @@ const stage = join(root, ".mcpb-build");
 const serverDir = join(stage, "server");
 const out = join(serverDir, "index.mjs");
 
+// Guardrail: the .mcpb version comes from manifest.json, but package.json drives
+// the puppeteer-core install and is the npm source of truth. If they disagree the
+// shipped bundle would show a stale version (and confuse installs), so fail loudly.
+const pkgJson = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+const manifestJson = JSON.parse(readFileSync(join(root, "manifest.json"), "utf8"));
+if (pkgJson.version !== manifestJson.version) {
+  throw new Error(
+    `Version mismatch: package.json is ${pkgJson.version} but manifest.json is ` +
+      `${manifestJson.version}. Bump both to the same version before building.`,
+  );
+}
+
 rmSync(stage, { recursive: true, force: true });
 mkdirSync(serverDir, { recursive: true });
 
@@ -45,8 +57,7 @@ writeFileSync(out, code);
 // Materialize puppeteer-core (+ its deps) next to the entry so the bundled
 // server can `import('puppeteer-core')` at runtime. Done at build time; the
 // resulting node_modules ships inside the .mcpb (the citizen installs nothing).
-const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
-const ppVersion = pkg.dependencies["puppeteer-core"];
+const ppVersion = pkgJson.dependencies["puppeteer-core"];
 writeFileSync(
   join(serverDir, "package.json"),
   JSON.stringify({ name: "open-state-camping-server", private: true }, null, 2),
