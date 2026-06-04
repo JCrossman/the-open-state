@@ -276,7 +276,18 @@ export function registerTools(
         // and they'll render inline once claude.ai supports it), AND a clickable
         // link per photo in the text — because claude.ai does not yet render tool
         // image blocks inline, the link is the citizen's in-flow way to open one.
-        if (args.include_photos !== false && details.photos.length > 0) {
+        if (args.include_photos === false) {
+          /* photos suppressed by request */
+        } else if (details.photos.length === 0) {
+          // Many campgrounds (e.g. Jasper's Whistlers) have no per-site photos.
+          // Say so plainly so it doesn't read as a malfunction.
+          content.push({
+            type: "text",
+            text:
+              "Parks Canada doesn't have any photos for this site. " +
+              "(Photo coverage varies by campground — some sites have none.)",
+          });
+        } else {
           const photos = await fetchPhotos(provider, details.photos, 3);
           if (photos.length > 0) {
             photos.forEach(({ url, image }, i) => {
@@ -287,7 +298,7 @@ export function registerTools(
               content.push(image);
             });
           } else {
-            // Couldn't fetch the images — fall back to links so nothing is lost.
+            // Photos exist but couldn't be fetched — fall back to links.
             content.push({ type: "text", text: fmt.formatPhotoLinks(details.photos) });
           }
         }
