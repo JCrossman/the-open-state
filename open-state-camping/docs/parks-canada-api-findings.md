@@ -82,27 +82,46 @@ The link prefills the **campground + dates + party + equipment**; the citizen
 picks the exact site and confirms in their own session. It is not per-site.
 [constructed from camply `get_reservation_link` + verified params; not click-tested]
 
-### Booking write path (authenticated; verified from a real capture)
+### Booking write path (authenticated; verified working end-to-end)
 
-Captured from a real authenticated booking driven to the **payment screen but not
-paid** (so: no reservation, no cancellation fee — the fee attaches only *after a
-reservation is confirmed*, i.e. after payment). The whole wizard is a sequence of
-**`POST /api/cart/commit?isCompleted=false&isSelfCheckIn=false`**, each re-sending
-the *entire growing cart object* (`{ "cart": { … } }`) — the same
-capture-and-replay-with-substitution shape as `POST /api/shopper`. Payment is a
-**separate, later step** not exercised here; we never automate it (Art. 2).
+A booking, in plain language: search → assemble a cart → commit it through the
+wizard's stages → hand the citizen their cart in their own browser to pay. Driven
+to the **payment screen but not paid** — no reservation and no fee exist until
+payment (the fee attaches only *after a reservation is confirmed*). Payment is a
+separate step we never automate (Art. 2).
 
-Key facts:
-- **Client-generated GUIDs.** `cartUid`, `bookingUid`, `cartTransactionUid`, and the
-  `resourceBlockerUid` are minted client-side before the first commit. **The first
-  commit *is* the hold** — there is no separate server "hold" endpoint. An unpaid
-  cart simply expires on its own.
+**The full sequence (all verified against the live system):**
+
+1. **`GET /api/cart`** — the server creates a cart and returns it with a
+   **server-generated `cartUid`**. (SPA: `initializeNewCart`.) A *client*-minted
+   cartUid is rejected.
+2. **`GET /api/cart/newtransaction?cartUid=<that>`** — the server initializes the
+   transaction and returns the cart with `newTransaction` populated:
+   `cartTransactionUid`, `shiftUid`, `userUid`, `referenceNumberPrefix` (`INPC26`),
+   `terminalLocationId` (`-2147483647`, the online terminal). (SPA:
+   `initializeNewCartTransaction`.) **These are server-authoritative — fabricating
+   them (e.g. zero-UUIDs) gets a bare HTTP 400 with no field detail.**
+3. Attach the shopper to the cart (SPA: `populateShopperOnCart`): set
+   `cart.shopper` = the raw `GET /api/shopper` envelope and
+   `cart.newTransaction.shopperUid` = the shopper's uid.
+4. Add the booking + hold into *that* cart (only `bookingUid` and
+   `resourceBlockerUid` are client-minted) and **`POST
+   /api/cart/commit?isCompleted=false&isSelfCheckIn=false`**, re-sending the whole
+   `{ "cart": { … } }` at each wizard stage (hold → details → finalize). The first
+   commit *is* the hold — no separate hold endpoint; an unpaid cart expires on its own.
+5. **Hand-off:** the SPA decides which cart to show from `localStorage`
+   (keys `cartUid` / `cartTransactionUid`), **not** from the session — so before
+   opening `/cart` in the citizen's browser, seed those keys with the built cart's
+   ids, or the page shows a fresh empty cart. Read the cart back with
+   **`GET /api/cart/get?cartUid=…&cartTransactionUid=…`** to confirm the booking landed.
+
+**Cart/booking shape:**
 - **`cart.bookings[0].newVersion`** carries the booking: `startDate`/`endDate`,
-  `equipmentCategoryId`/`subEquipmentCategoryId` (`-32768` non-group),
-  `rateCategoryId` (`-32768` standard), `checkInTime` `14:00` / `checkOutTime`
-  `11:00` (from `/api/resource/model`), `bookingCapacityCategoryCounts`,
-  `occupant`, `bookingMembers`, and `resourceBlockerUids`. `completedDate` is
-  `null` and `bookingStatus` `0` until payment.
+  `equipmentCategoryId`/`subEquipmentCategoryId`, `rateCategoryId` (`-32768`
+  standard), `checkInTime` `14:00` / `checkOutTime` `11:00` (from
+  `/api/resource/model`), `bookingCapacityCategoryCounts`, `occupant`,
+  `bookingMembers`, `resourceBlockerUids`. `completedDate` `null`, `bookingStatus`
+  `0` until payment. (`completedDate` is a timestamp on the hold-stage commit only.)
 - **Party counts** = four entries under `capacityCategoryId -32767`, by
   `subCapacityCategoryId`: **`-32768` Adult, `-32767` Senior, `-32766` Youth,
   `-32765` Child**.
@@ -113,21 +132,22 @@ Key facts:
   `copiedShopperUid = shopperUid`, `bookingCustomerChainUid = null`, and
   `allowMarketing`/`allowEmergencySms` (default `false`). Profile-only fields
   (`vehicles`, `boats`, `communicationPreferences`, flagged dates) are dropped.
-- **`bookingMembers[0]`** = the holder: `{ firstName, lastName, isBookingHolder:
-  true, order: 0 }` (other fields null/empty).
-- **`cart.shopper`** is the *raw* `GET /api/shopper` envelope (`shopperUid`,
-  `currentVersion`, `history`, `hasWebAccount`), threaded back unchanged — not the
-  unwrapped profile that reads/updates use.
+- **`bookingMembers[0]`** (added at the finalize stage) = the holder:
+  `{ firstName, lastName, isBookingHolder: true, order: 0 }`.
+- **`booking.currentVersion` stays `null`** across every commit, so re-committing
+  the whole cart is fine — no optimistic-concurrency version to thread back.
 - Supporting reads the SPA fires around the commits (not all required to write):
   `/api/availability/resourcestatus`, `/api/resource/model`,
   `/api/resourcelocation/resourceId`, `/api/surcharge/getSurchargeDetailsPackageForBooking`,
   `/api/cart/get|lineitems|resourceinfo`, `/api/bookingvalidation/*`,
   `/api/payment/balanceowing|typesettings` (payment screen).
 
-Implemented in `packages/core/src/booking.ts` (`buildBookingCart`) and verified by
-an **offline replay-diff** test (`packages/core/test/booking.test.ts`) against a
+Implemented in `packages/core/src/{client,booking}.ts` and
+`packages/bundle/src/booking-tools.ts`; the cart assembly is checked by an
+**offline replay-diff** test (`packages/core/test/booking.test.ts`) against a
 sanitized capture in `test/fixtures/booking/` — the cart is rebuilt from inputs and
-asserted byte-for-byte against what the platform accepted, with no network call.
+asserted against what the platform accepted, with no network call. **Lesson that
+kept recurring: use the real object the server returns; don't reconstruct it.**
 
 ## Divergences from camply (camply 0.34.2 is stale for this host)
 

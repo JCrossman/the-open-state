@@ -174,6 +174,42 @@ describe("booking ids", () => {
   });
 });
 
+describe("booking cart assembly — variations (shake-out beyond the captured path)", () => {
+  function nv(overrides: Partial<BookingRequest>) {
+    const req: BookingRequest = { ...request, ...overrides };
+    return buildBookingCart(baseCart(), req, ids, envelope, "finalize").cart.bookings[0].newVersion;
+  }
+
+  it("threads a multi-night stay into the booking and the hold", () => {
+    const req: BookingRequest = { ...request, startDate: "2099-08-10", endDate: "2099-08-14" };
+    const { cart } = buildBookingCart(baseCart(), req, ids, envelope, "finalize");
+    expect(cart.bookings[0].newVersion.startDate).toBe("2099-08-10");
+    expect(cart.bookings[0].newVersion.endDate).toBe("2099-08-14");
+    expect(cart.resourceBlockers[0].newVersion.startDate).toBe("2099-08-10");
+    expect(cart.resourceBlockers[0].newVersion.endDate).toBe("2099-08-14");
+  });
+
+  it("books the chosen equipment under the frontcountry category (RV/van, not tent)", () => {
+    const v = nv({ subEquipmentCategoryId: -32765 }); // Van/Pickup
+    expect(v.subEquipmentCategoryId).toBe(-32765);
+    expect(v.equipmentCategoryId).toBe(-32768); // frontcountry "Equipment" category
+  });
+
+  it("defaults equipment to small tent when none is given", () => {
+    expect(nv({}).subEquipmentCategoryId).toBe(-32768);
+  });
+
+  it("carries a mixed party into the four capacity counts", () => {
+    const v = nv({ party: { adults: 2, seniors: 1, youth: 1, children: 2 } });
+    expect(v.bookingCapacityCategoryCounts).toEqual([
+      { capacityCategoryId: -32767, count: 2, subCapacityCategoryId: -32768 },
+      { capacityCategoryId: -32767, count: 1, subCapacityCategoryId: -32767 },
+      { capacityCategoryId: -32767, count: 1, subCapacityCategoryId: -32766 },
+      { capacityCategoryId: -32767, count: 2, subCapacityCategoryId: -32765 },
+    ]);
+  });
+});
+
 describe("booking cart assembly — uses the server transaction", () => {
   it("threads the server-issued cartTransactionUid into the booking, not a client guess", () => {
     const base = baseCart();

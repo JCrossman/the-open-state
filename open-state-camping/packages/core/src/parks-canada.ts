@@ -315,6 +315,15 @@ export class ParksCanadaProvider {
     return this.client.getCart(cartUid, cartTransactionUid);
   }
 
+  /**
+   * Resolve a citizen's equipment word or id to the platform's equipment id, for
+   * booking. Throws InvalidInputError (naming the options) for an ambiguous or
+   * unknown word; `null`/empty → no specific equipment (caller picks a default).
+   */
+  resolveEquipment(equipmentType?: string | null): Promise<number | null> {
+    return this.resolveEquipmentId(equipmentType);
+  }
+
   /** Commit a booking cart (after the citizen confirms; never past payment). */
   commitCart(
     cart: { cart: Record<string, any> },

@@ -62,6 +62,14 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
         seniors: z.number().int().min(0).optional().describe("Seniors 65+."),
         youth: z.number().int().min(0).optional().describe("Youth 6-17."),
         children: z.number().int().min(0).optional().describe("Children 0-5."),
+        equipment_type: z
+          .string()
+          .optional()
+          .describe(
+            "The equipment for the site (e.g. 'small tent', 'van', or an id from " +
+              "list_equipment_types). Use the same equipment you searched with. " +
+              "Defaults to a small tent.",
+          ),
         confirm: z
           .boolean()
           .optional()
@@ -100,15 +108,26 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
         );
       }
 
+      // Book the equipment the citizen actually wants (the site was found open for
+      // it). Resolve the word/id; a bad value is flagged, not silently defaulted.
+      let subEquipmentCategoryId: number | undefined;
+      try {
+        const resolved = await provider.resolveEquipment(args.equipment_type ?? null);
+        subEquipmentCategoryId = resolved ?? undefined;
+      } catch (err) {
+        return text(err instanceof Error ? err.message : String(err));
+      }
+
       const request: BookingRequest = {
         resourceId: Number(args.site_id),
         resourceLocationId: Number(args.campground_id),
         startDate: args.start_date,
         endDate: args.end_date,
         party,
+        subEquipmentCategoryId,
       };
 
-      const summary = bookingSummary(request, party, envelope);
+      const summary = bookingSummary(request, party, envelope, args.equipment_type);
 
       // Phase 1 — prepare and describe only. Nothing is held or written.
       if (!args.confirm) {
@@ -233,6 +252,7 @@ function bookingSummary(
   request: BookingRequest,
   party: PartyCounts,
   envelope: ShopperEnvelope,
+  equipmentLabel?: string,
 ): string {
   const p = envelope.currentVersion;
   const who = [p["firstName"], p["lastName"]].filter(Boolean).join(" ") || "you";
@@ -243,14 +263,16 @@ function bookingSummary(
     party.youth ? `${party.youth} youth` : "",
     party.children ? `${party.children} child${party.children === 1 ? "" : "ren"}` : "",
   ].filter(Boolean);
-  return [
+  const lines = [
     "Here's the booking I'll prepare:",
     `- Site: ${request.resourceId} (campground ${request.resourceLocationId})`,
     `- Dates: ${withWeekday(request.startDate)} to ${withWeekday(request.endDate)}` +
       (nights ? ` (${nights} night${nights === 1 ? "" : "s"})` : ""),
     `- Party: ${partyParts.join(", ") || "1 adult"}`,
-    `- Reservation for: ${who}`,
-  ].join("\n");
+  ];
+  if (equipmentLabel) lines.push(`- Equipment: ${equipmentLabel}`);
+  lines.push(`- Reservation for: ${who}`);
+  return lines.join("\n");
 }
 
 function nightsBetween(start: string, end: string): number {
