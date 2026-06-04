@@ -191,19 +191,17 @@ export function formatSearchSites(
     parts.push(site.accessible ? "accessible" : "not marked accessible");
     if (site.siteType) parts.push(site.siteType);
     if (site.maxOccupancy) parts.push(`sleeps up to ${site.maxOccupancy}`);
-    lines.push(`- ${parts.join("; ")} (campsite id: ${site.campsiteId})`);
+    // The id is for tool calls only — keep it out of the part the citizen reads.
+    lines.push(`- ${parts.join("; ")}  [internal id ${site.campsiteId}]`);
   }
   if (sites.length > 25) {
     lines.push(`- ... and ${sites.length - 25} more open site(s).`);
   }
   lines.push(
     "",
-    "To book, open this link in your browser, sign in to your own Parks " +
-      "Canada account, choose your exact site, and confirm:",
-    sites[0]!.bookingUrl ?? "",
-    "",
-    "This tool prepares the booking only. You complete and pay for it " +
-      "yourself in your Parks Canada session; it never books or pays for you.",
+    "Tell me which site you'd like (or ask for its details and photos) and I'll " +
+      "prepare the booking — I take it right up to the payment screen and you " +
+      "review and pay yourself. Don't show the citizen the internal id numbers.",
   );
   return lines.join("\n");
 }

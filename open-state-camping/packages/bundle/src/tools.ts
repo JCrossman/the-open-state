@@ -290,12 +290,19 @@ export function registerTools(
         } else {
           const photos = await fetchPhotos(provider, details.photos, 3);
           if (photos.length > 0) {
-            photos.forEach(({ url, image }, i) => {
-              content.push({
-                type: "text",
-                text: `[${siteLabel} — photo ${i + 1} of ${photos.length}](${url})`,
-              });
-              content.push(image);
+            // The image blocks let the assistant SEE the photos (to describe them).
+            for (const { image } of photos) content.push(image);
+            // Ready-to-paste markdown so the assistant can show them INLINE in its
+            // reply — claude.ai renders markdown images in the message, unlike tool
+            // image blocks (which it currently tucks into a side panel).
+            const embeds = photos
+              .map(({ url }, i) => `![${siteLabel} — photo ${i + 1}](${url})`)
+              .join("\n");
+            content.push({
+              type: "text",
+              text:
+                `To show these ${photos.length} photo(s) to the citizen inline, put ` +
+                `this markdown in your reply, then describe what they show:\n${embeds}`,
             });
           } else {
             // Photos exist but couldn't be fetched — fall back to links.

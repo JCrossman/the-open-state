@@ -89,11 +89,17 @@ async function callText(
 }
 
 describe("bundle MCP server", () => {
-  it("ships server instructions that steer date handling and booking", async () => {
+  it("ships server instructions that steer dates, ids, photos, and booking", async () => {
     const client = await connectClient();
     const instr = client.getInstructions() ?? "";
+    // Today's real date is anchored so the assistant stops thinking dates are past.
+    const today = new Date().toISOString().slice(0, 10);
+    expect(instr).toContain(today);
     expect(instr).toMatch(/resolve_dates/);
     expect(instr).toMatch(/day of the week/i);
+    // Don't surface internal ids / tables; embed photos as markdown; use prepare_booking.
+    expect(instr).toMatch(/id numbers|internal/i);
+    expect(instr).toMatch(/markdown image/i);
     expect(instr).toMatch(/prepare_booking/);
   });
 
@@ -127,7 +133,10 @@ describe("bundle MCP server", () => {
       party_size: 2,
     });
     expect(out).toContain("marked accessible");
-    expect(out).toMatch(/never books or pays/i);
+    // Steers to prepare_booking (not a deep link) and keeps internal ids hidden.
+    expect(out).toMatch(/prepare the booking/i);
+    expect(out).toMatch(/review and pay yourself/i);
+    expect(out).toMatch(/internal id/i);
     // The stay carries a computed weekday, to ground the assistant's date sense.
     expect(out).toMatch(/(Sun|Mon|Tue|Wed|Thu|Fri|Sat), 2099-07-17/);
   });
