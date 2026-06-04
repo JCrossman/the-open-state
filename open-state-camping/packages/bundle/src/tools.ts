@@ -267,9 +267,11 @@ export function registerTools(
           campsiteId: args.campsite_id,
         });
         const siteLabel = details.siteName ? `Site ${details.siteName}` : "This site";
+        const siteSlug = (details.siteName || "site").replace(/[^A-Za-z0-9]+/g, "-");
         const content: Array<
           | { type: "text"; text: string }
           | { type: "image"; data: string; mimeType: string }
+          | { type: "resource"; resource: { uri: string; mimeType: string; blob: string } }
         > = [{ type: "text", text: fmt.formatSiteDetails(details) }];
 
         // Photos: return the image blocks (so the assistant can see/describe them,
@@ -290,11 +292,20 @@ export function registerTools(
         } else {
           const photos = await fetchPhotos(provider, details.photos, 3);
           if (photos.length > 0) {
-            // Return the images as blocks — claude.ai shows these in its Content
-            // panel. We deliberately do NOT emit markdown image / link syntax for
-            // the assistant to paste, because remote image links render as
-            // click-to-load tiles that pop a browser window (a worse experience).
-            for (const { image } of photos) content.push(image);
+            // Return each photo as a NAMED resource (not a bare image block), so
+            // claude.ai shows a meaningful caption ("Site-816-photo-1.jpg") in the
+            // Content panel instead of a random GUID. The blob is inline data, so
+            // there's no remote fetch / browser-opening tile.
+            photos.forEach(({ image }, i) => {
+              content.push({
+                type: "resource",
+                resource: {
+                  uri: `openstate://photos/Site-${siteSlug}-photo-${i + 1}.jpg`,
+                  mimeType: image.mimeType,
+                  blob: image.data,
+                },
+              });
+            });
             content.push({
               type: "text",
               text:
