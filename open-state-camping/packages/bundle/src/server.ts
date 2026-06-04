@@ -18,15 +18,42 @@ import { loadSession, sessionAuthHeaders } from "./session/vault.js";
 
 import type { BundleConfig } from "./config.js";
 
+/**
+ * Server-level instructions, surfaced to the assistant globally (not just when a
+ * tool runs). This is the strongest place to counter behaviours that happen in
+ * the assistant's own prose *before* it calls a tool — most importantly its
+ * unreliable date arithmetic.
+ */
+export const SERVER_INSTRUCTIONS = [
+  "The Open State: Camping helps a citizen find and book Parks Canada campsites accessibly.",
+  "",
+  "Dates — important: you are not reliable at calendar arithmetic. Do NOT state the",
+  "day of the week for a date, and do NOT decide which year a bare date like",
+  '"June 16" means, on your own — and do not announce a weekday in passing before',
+  "checking. For ANY date the citizen mentions, call resolve_dates FIRST (give the",
+  "month and day; leave the year off for the next upcoming occurrence) and use the",
+  "exact start_date / end_date and weekday it returns. The search and booking tools",
+  "also report each date's correct weekday — trust those over your own calculation;",
+  "if you ever wrote a weekday yourself, recheck it against the tool output.",
+  "",
+  "Booking: to book or reserve a site, use prepare_booking — it completes the",
+  "reservation up to the payment screen so the citizen only enters their card.",
+  "Never tell the citizen to go book it themselves on the website, and never hand",
+  "them a raw booking link unless prepare_booking genuinely cannot be used.",
+].join("\n");
+
 /** Build a server around a given provider (used by tests with a fixture provider). */
 export function createServerForProvider(
   provider: ParksCanadaProvider,
   config: BundleConfig,
 ): McpServer {
-  const server = new McpServer({
-    name: "open-state-camping",
-    version: "0.1.0",
-  });
+  const server = new McpServer(
+    {
+      name: "open-state-camping",
+      version: "0.1.0",
+    },
+    { instructions: SERVER_INSTRUCTIONS },
+  );
   registerTools(server, provider, config);
   return server;
 }

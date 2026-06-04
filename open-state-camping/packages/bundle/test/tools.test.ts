@@ -89,6 +89,14 @@ async function callText(
 }
 
 describe("bundle MCP server", () => {
+  it("ships server instructions that steer date handling and booking", async () => {
+    const client = await connectClient();
+    const instr = client.getInstructions() ?? "";
+    expect(instr).toMatch(/resolve_dates/);
+    expect(instr).toMatch(/day of the week/i);
+    expect(instr).toMatch(/prepare_booking/);
+  });
+
   it("exposes the read tools", async () => {
     const client = await connectClient();
     const tools = (await client.listTools()).tools.map((t) => t.name).sort();
