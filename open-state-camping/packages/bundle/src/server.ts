@@ -40,6 +40,12 @@ export const SERVER_INSTRUCTIONS = [
   "reservation up to the payment screen so the citizen only enters their card.",
   "Never tell the citizen to go book it themselves on the website, and never hand",
   "them a raw booking link unless prepare_booking genuinely cannot be used.",
+  "",
+  "Photos: when get_site_details returns a site's photos, describe in your reply",
+  "what they actually show — how exposed, treed, sloped, level, or private the site",
+  "looks. A plain-language description is more accessible than the image and reaches",
+  "citizens who use a screen reader or can't easily open the photo. The photos also",
+  "come with a clickable link each; mention they can open those to see for themselves.",
 ].join("\n");
 
 /** Build a server around a given provider (used by tests with a fixture provider). */

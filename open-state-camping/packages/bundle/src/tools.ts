@@ -272,18 +272,19 @@ export function registerTools(
           | { type: "image"; data: string; mimeType: string }
         > = [{ type: "text", text: fmt.formatSiteDetails(details) }];
 
-        // Photos inline by default. Interleave a caption before each image so they
-        // sit in the chat flow with screen-reader context, rather than being
-        // collected into a side gallery the citizen has to open.
+        // Photos: return the image blocks (so the assistant can see/describe them,
+        // and they'll render inline once claude.ai supports it), AND a clickable
+        // link per photo in the text — because claude.ai does not yet render tool
+        // image blocks inline, the link is the citizen's in-flow way to open one.
         if (args.include_photos !== false && details.photos.length > 0) {
-          const images = await fetchPhotos(provider, details.photos, 3);
-          if (images.length > 0) {
-            images.forEach((img, i) => {
+          const photos = await fetchPhotos(provider, details.photos, 3);
+          if (photos.length > 0) {
+            photos.forEach(({ url, image }, i) => {
               content.push({
                 type: "text",
-                text: `${siteLabel} — photo ${i + 1} of ${images.length}:`,
+                text: `[${siteLabel} — photo ${i + 1} of ${photos.length}](${url})`,
               });
-              content.push(img);
+              content.push(image);
             });
           } else {
             // Couldn't fetch the images — fall back to links so nothing is lost.
@@ -375,19 +376,24 @@ async function equipmentPrompt(
   return lines.join("\n");
 }
 
+type ImageBlock = { type: "image"; data: string; mimeType: string };
+
 async function fetchPhotos(
   provider: ParksCanadaProvider,
   photos: string[],
   cap: number,
-): Promise<{ type: "image"; data: string; mimeType: string }[]> {
-  const out: { type: "image"; data: string; mimeType: string }[] = [];
+): Promise<{ url: string; image: ImageBlock }[]> {
+  const out: { url: string; image: ImageBlock }[] = [];
   for (const url of photos.slice(0, cap)) {
     const img = await provider.fetchPhoto(url);
     if (img) {
       out.push({
-        type: "image",
-        data: Buffer.from(img.bytes).toString("base64"),
-        mimeType: img.contentType || "image/jpeg",
+        url,
+        image: {
+          type: "image",
+          data: Buffer.from(img.bytes).toString("base64"),
+          mimeType: img.contentType || "image/jpeg",
+        },
       });
     }
   }
