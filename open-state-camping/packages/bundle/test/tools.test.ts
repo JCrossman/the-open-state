@@ -6,12 +6,15 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { GoingToCampClient, ParksCanadaProvider, type FetchLike } from "@open-state/core";
 import { createServerForProvider } from "../src/server.js";
 import { flexibleRangeHint } from "../src/tools.js";
+import { stayDatesProblem } from "../src/format.js";
 import { normalizePhone } from "../src/account-tools.js";
 
 const CAMPGROUND_ID = "-2147483644";
 const ROOT_MAP_ID = "-2147483626";
-const START = "2026-07-17";
-const END = "2026-07-19";
+// Far-future so the new past-date guard never trips these (fixtures are
+// date-independent — the mock returns the same availability for any window).
+const START = "2099-07-17";
+const END = "2099-07-19";
 
 // Fixtures live in the core package (same recorded API responses).
 function fixture(name: string): unknown {
@@ -178,6 +181,28 @@ describe("phone normalization (E.164 for Parks Canada)", () => {
   });
 });
 
+describe("past-date guard (date grounding)", () => {
+  it("flags a past arrival and suggests the right year", () => {
+    // A bare 'June 17' the assistant resolved to last year, with today well after.
+    const msg = stayDatesProblem("2020-06-17", "2020-06-18");
+    expect(msg).toBeTruthy();
+    expect(msg).toMatch(/in the past/i);
+    expect(msg).toMatch(/today is/i);
+    // suggests the same month/day in a non-past year
+    expect(msg).toMatch(/-06-17/);
+  });
+
+  it("flags a departure that isn't after arrival", () => {
+    const msg = stayDatesProblem("2999-06-18", "2999-06-17");
+    expect(msg).toBeTruthy();
+    expect(msg).toMatch(/after the arrival/i);
+  });
+
+  it("passes a valid future stay", () => {
+    expect(stayDatesProblem("2999-06-17", "2999-06-18")).toBeNull();
+  });
+});
+
 describe("wide-date-range guard", () => {
   it("flags a long exact-stay search instead of a false 'no availability'", () => {
     const hint = flexibleRangeHint("2026-06-01", "2026-07-01");
@@ -193,11 +218,16 @@ describe("wide-date-range guard", () => {
     expect(flexibleRangeHint("2026-06-01", "2026-07-01", 2)).toBeNull();
   });
 
+  // Far-future dates so the past-date guard never fires (tests stay deterministic
+  // as real time advances); the fixtures are date-independent.
+  const WIDE_START = "2099-06-01";
+  const WIDE_END = "2099-07-01";
+
   it("a wide park search without nights asks for a stay length, not 'fully booked'", async () => {
     const out = await callText(await connectClient(), "search_park_availability", {
       query: "Banff",
-      start_date: "2026-06-01",
-      end_date: "2026-07-01",
+      start_date: WIDE_START,
+      end_date: WIDE_END,
       party_size: 2,
     });
     expect(out).toMatch(/how many nights/i);
@@ -208,8 +238,8 @@ describe("wide-date-range guard", () => {
   it("a wide park search WITH nights runs the search", async () => {
     const out = await callText(await connectClient(), "search_park_availability", {
       query: "Banff",
-      start_date: "2026-06-01",
-      end_date: "2026-07-01",
+      start_date: WIDE_START,
+      end_date: WIDE_END,
       party_size: 2,
       nights: 2,
     });

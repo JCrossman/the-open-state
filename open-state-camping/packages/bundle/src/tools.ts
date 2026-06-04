@@ -124,6 +124,8 @@ export function registerTools(
     },
     async (args) => {
       try {
+        const dateIssue = fmt.stayDatesProblem(args.start_date, args.end_date);
+        if (dateIssue) return text(dateIssue);
         const hint = flexibleRangeHint(args.start_date, args.end_date, args.nights ?? null);
         if (hint) return text(hint);
         const sites = await provider.searchSites({
@@ -175,6 +177,8 @@ export function registerTools(
     },
     async (args) => {
       try {
+        const dateIssue = fmt.stayDatesProblem(args.start_date, args.end_date);
+        if (dateIssue) return text(dateIssue);
         const hint = flexibleRangeHint(args.start_date, args.end_date, args.nights ?? null);
         if (hint) return text(hint);
         const results = await provider.searchParkAvailability({
@@ -273,6 +277,8 @@ export function registerTools(
     async (args) => {
       const area = args.recreation_area_id ?? recArea;
       try {
+        const dateIssue = fmt.stayDatesProblem(args.start_date, args.end_date);
+        if (dateIssue) return text(dateIssue);
         if (args.equipment_type == null) {
           return text(await equipmentPrompt(provider, area, "missing"));
         }

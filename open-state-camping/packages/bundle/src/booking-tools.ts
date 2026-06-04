@@ -25,6 +25,7 @@ import {
 } from "@open-state/core";
 import { openCheckout } from "./session/capture.js";
 import { loadSession } from "./session/vault.js";
+import { stayDatesProblem, withWeekday } from "./format.js";
 
 type TextResult = { content: { type: "text"; text: string }[] };
 const text = (s: string): TextResult => ({ content: [{ type: "text", text: s }] });
@@ -72,6 +73,9 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
       if (!loadSession()) {
         return text("You're not connected yet. Run connect_account to sign in first.");
       }
+
+      const dateIssue = stayDatesProblem(args.start_date, args.end_date);
+      if (dateIssue) return text(dateIssue);
 
       const party: PartyCounts = {
         adults: args.adults ?? 1,
@@ -228,17 +232,4 @@ function nightsBetween(start: string, end: string): number {
   const b = Date.parse(end);
   if (Number.isNaN(a) || Number.isNaN(b)) return 0;
   return Math.max(0, Math.round((b - a) / 86_400_000));
-}
-
-/**
- * Render an ISO date with its weekday, e.g. "Wed, 2026-06-17". The assistant can
- * confabulate the day of week from a bare date; spelling it out keeps the
- * confirmation grounded in the real calendar (parsed UTC to avoid TZ drift).
- */
-function withWeekday(iso: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
-  if (!m) return iso;
-  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
-  const day = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getUTCDay()];
-  return `${day}, ${iso}`;
 }

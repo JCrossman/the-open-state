@@ -6,12 +6,49 @@ import {
   InvalidInputError,
   QueueItError,
   UpstreamError,
+  nextOccurrence,
+  todayUTC,
+  weekdayName,
   type AvailableSite,
   type CampgroundAvailability,
   type EquipmentType,
   type RecreationArea,
   type SiteDetails,
 } from "@open-state/core";
+
+/** A date with its weekday, e.g. "Wed, 2026-06-17" — grounds the assistant,
+ *  which can otherwise confabulate the weekday or year from a bare date. */
+export function withWeekday(iso: string): string {
+  return /^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${weekdayName(iso)}, ${iso}` : iso;
+}
+
+/**
+ * Catch impossible stay dates before searching/booking, returning a correcting
+ * message (or null if fine). The tool — running on the citizen's machine — is
+ * the authority on today's date, so a past arrival is almost always the
+ * assistant resolving a bare date ("June 17") to the wrong year. We state
+ * today's real date and suggest the right year rather than returning an empty
+ * result the assistant then "explains" as the date being in the past.
+ */
+export function stayDatesProblem(start: string, end: string): string | null {
+  const today = todayUTC();
+  if (start < today) {
+    const suggested = nextOccurrence(start);
+    return (
+      `That arrival date, ${withWeekday(start)}, is in the past — today is ` +
+      `${withWeekday(today)}. You most likely mean ${withWeekday(suggested)}; ` +
+      `search again with that date. (Parks Canada only has availability for ` +
+      `today onward.)`
+    );
+  }
+  if (end <= start) {
+    return (
+      `The departure date (${withWeekday(end)}) needs to be after the arrival ` +
+      `date (${withWeekday(start)}). For a one-night stay, depart the next day.`
+    );
+  }
+  return null;
+}
 
 export const INDEPENDENCE_NOTE =
   "The Open State is an independent public-interest tool. " +

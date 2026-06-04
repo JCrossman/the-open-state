@@ -29,3 +29,29 @@ export function daysBetween(start: ISODate, end: ISODate): number {
 export function weekday(iso: ISODate): number {
   return toUTCDate(iso).getUTCDay();
 }
+
+const WEEKDAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+
+/** Short weekday label for a date, e.g. "Wed". */
+export function weekdayName(iso: ISODate): string {
+  return WEEKDAY_NAMES[weekday(iso)]!;
+}
+
+/** Today's date (UTC) as an ISO string — the tool runs on the citizen's machine,
+ *  so this is the real current date, which the assistant's prose can drift from. */
+export function todayUTC(): ISODate {
+  return fromUTCDate(new Date());
+}
+
+/**
+ * The next occurrence of a date's month/day that is not in the past. Used to
+ * suggest the right year when a bare "June 17" was resolved to a past year:
+ * keeps the month/day, advances the year to today's (or next year if that day
+ * has already passed this year).
+ */
+export function nextOccurrence(iso: ISODate, today: ISODate = todayUTC()): ISODate {
+  const [, m, d] = iso.split("-");
+  const year = Number(today.slice(0, 4));
+  const candidate = `${year}-${m}-${d}`;
+  return candidate < today ? `${year + 1}-${m}-${d}` : candidate;
+}
