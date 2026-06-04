@@ -12,6 +12,9 @@ export interface Campground {
   recreationAreaId: string;
   campgroundId: string;
   name: string;
+  /** Booking groups this campground offers (e.g. "Frontcountry Camping",
+   *  "Accommodations"), for orienting the citizen among the kinds of stay. */
+  offers?: string[];
 }
 
 export interface RecreationArea {

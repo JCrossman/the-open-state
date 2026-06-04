@@ -188,11 +188,19 @@ export function registerTools(
           weekendsOnly: args.weekends_only ?? false,
           category: args.category,
         });
+        // On an empty result, name what the campground does offer so the citizen
+        // can tell "none free that week" from "this park has none of those".
+        const offers =
+          sites.length === 0
+            ? await provider.campgroundOfferings(args.campground_id)
+            : undefined;
         return text(
           fmt.formatSearchSites(sites, {
             stay: stay(args.start_date, args.end_date),
             partySize: args.party_size,
             accessibleOnly: args.accessible_only ?? false,
+            category: args.category,
+            offers,
           }),
         );
       } catch (e) {

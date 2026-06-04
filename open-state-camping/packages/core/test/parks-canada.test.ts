@@ -100,6 +100,29 @@ describe("ParksCanadaProvider — search", () => {
     expect(await makeProvider().searchParks("anything", "US")).toEqual([]);
   });
 
+  it("surfaces the booking groups each campground offers", async () => {
+    const areas = await makeProvider().searchParks("Banff");
+    const cgs = areas[0]!.campgrounds;
+    // -2147483644 is campsite+overflow (frontcountry only); -2147483643 adds an oTENTik.
+    expect(cgs.find((c) => c.campgroundId === CAMPGROUND_ID)!.offers).toEqual([
+      "Frontcountry Camping",
+    ]);
+    expect(cgs.find((c) => c.campgroundId === "-2147483643")!.offers).toEqual([
+      "Frontcountry Camping",
+      "Accommodations",
+    ]);
+  });
+
+  it("reports a single campground's offerings by id", async () => {
+    expect(await makeProvider().campgroundOfferings(CAMPGROUND_ID)).toEqual([
+      "Frontcountry Camping",
+    ]);
+    expect(await makeProvider().campgroundOfferings("-2147483643")).toEqual([
+      "Frontcountry Camping",
+      "Accommodations",
+    ]);
+  });
+
   it("lists equipment types with id and name", async () => {
     const types = await makeProvider().listEquipmentTypes("14");
     expect(types.length).toBeGreaterThan(0);

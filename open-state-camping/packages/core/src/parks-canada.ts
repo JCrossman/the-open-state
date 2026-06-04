@@ -5,11 +5,14 @@
  */
 import {
   BOOKING_CATEGORY_ID,
+  BOOKING_GROUP,
+  bookingGroupForCategory,
   CATEGORY_GROUPS,
   PARKS_CANADA_HOSTNAME,
   PARKS_CANADA_NAME,
   PARKS_CANADA_REC_AREA_ID,
   SERVICE_TYPE_ATTR,
+  type BookingGroup,
   type CategoryGroup,
 } from "./constants.js";
 import {
@@ -18,6 +21,7 @@ import {
   type CampgroundRecord,
   type EquipmentRecord,
   type FetchLike,
+  type ResourceCategoryInfo,
 } from "./client.js";
 import { InvalidInputError, UpstreamError } from "./errors.js";
 import {
@@ -72,7 +76,7 @@ export class ParksCanadaProvider {
   private campgroundsCache?: CampgroundRecord[];
   private attrDefsCache?: Record<string, any>;
   private equipmentCache?: EquipmentRecord[];
-  private resourceCategoriesCache?: Map<number, string>;
+  private resourceCategoriesCache?: Map<number, ResourceCategoryInfo>;
 
   constructor(
     opts: {
@@ -103,12 +107,15 @@ export class ParksCanadaProvider {
       (c.name ?? "").toLowerCase().includes(needle),
     );
     if (matched.length === 0) return [];
-    const campgrounds = matched.map((c) => ({
-      provider: PROVIDER_NAME,
-      recreationAreaId: PARKS_CANADA_REC_AREA_ID,
-      campgroundId: String(c.resourceLocationId),
-      name: c.name,
-    }));
+    const campgrounds = await Promise.all(
+      matched.map(async (c) => ({
+        provider: PROVIDER_NAME,
+        recreationAreaId: PARKS_CANADA_REC_AREA_ID,
+        campgroundId: String(c.resourceLocationId),
+        name: c.name,
+        offers: await this.offeredGroups(c.offeredCategoryIds),
+      })),
+    );
     return [
       {
         provider: PROVIDER_NAME,
@@ -191,7 +198,7 @@ export class ParksCanadaProvider {
         siteName: resourceName(resource) ?? resourceId,
         accessible,
         availableDates: dates,
-        siteType: categoryNames.get(categoryId) ?? serviceTypeLabel(resource, defs),
+        siteType: categoryNames.get(categoryId)?.name ?? serviceTypeLabel(resource, defs),
         maxOccupancy: maxOccupancy ?? undefined,
         bookingUrl,
       });
@@ -389,12 +396,39 @@ export class ParksCanadaProvider {
     return this.equipmentCache;
   }
 
-  /** Cached resourceCategoryId → name map (Campsite, oTENTik, Cabin, Group, …). */
-  private async resourceCategories(): Promise<Map<number, string>> {
+  /** Cached resourceCategoryId → {name, resourceType} (Campsite, oTENTik, Cabin, …). */
+  private async resourceCategories(): Promise<Map<number, ResourceCategoryInfo>> {
     if (!this.resourceCategoriesCache) {
       this.resourceCategoriesCache = await this.client.listResourceCategories();
     }
     return this.resourceCategoriesCache;
+  }
+
+  /** The distinct booking groups a campground offers (Frontcountry Camping,
+   *  Accommodations, Backcountry, Day Use), grounded in its resource categories. */
+  private async offeredGroups(offeredCategoryIds: number[]): Promise<BookingGroup[]> {
+    const cats = await this.resourceCategories();
+    const groups = new Set<BookingGroup>();
+    for (const id of offeredCategoryIds) {
+      const g = bookingGroupForCategory(id, cats.get(id)?.resourceType);
+      if (g) groups.add(g);
+    }
+    // Stable, user-facing order.
+    const order = [
+      BOOKING_GROUP.frontcountry,
+      BOOKING_GROUP.accommodation,
+      BOOKING_GROUP.backcountry,
+      BOOKING_GROUP.dayUse,
+    ];
+    return order.filter((g) => groups.has(g));
+  }
+
+  /** Booking groups a single campground offers, by id (for empty-result hints). */
+  async campgroundOfferings(campgroundId: string): Promise<BookingGroup[]> {
+    const cg = (await this.campgrounds()).find(
+      (c) => String(c.resourceLocationId) === String(campgroundId),
+    );
+    return cg ? this.offeredGroups(cg.offeredCategoryIds) : [];
   }
 
   private async attrDefs(): Promise<Record<string, any>> {

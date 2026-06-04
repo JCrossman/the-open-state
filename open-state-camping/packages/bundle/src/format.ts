@@ -5,6 +5,7 @@
 import {
   InvalidInputError,
   QueueItError,
+  SEARCHABLE_BOOKING_GROUPS,
   UpstreamError,
   addDays,
   isoFromParts,
@@ -18,6 +19,15 @@ import {
   type RecreationArea,
   type SiteDetails,
 } from "@open-state/core";
+
+/** Render a campground's offered booking groups, flagging not-yet-searchable ones. */
+function offersLine(offers: string[] | undefined): string {
+  if (!offers || offers.length === 0) return "";
+  const rendered = offers.map((g) =>
+    SEARCHABLE_BOOKING_GROUPS.has(g as never) ? g : `${g} (not yet searchable here)`,
+  );
+  return ` — offers: ${rendered.join(", ")}`;
+}
 
 /**
  * Resolve a citizen's date (month/day, optional year) into exact calendar dates
@@ -144,7 +154,19 @@ export function formatSearchParks(query: string, areas: RecreationArea[]): strin
     "Campgrounds:",
   ];
   for (const c of area.campgrounds) {
-    lines.push(`- ${c.name} (campground id: ${c.campgroundId})`);
+    lines.push(`- ${c.name} (campground id: ${c.campgroundId})${offersLine(c.offers)}`);
+  }
+  // Orient the citizen among the kinds of stay, grounded in what these parks offer.
+  const offered = new Set(area.campgrounds.flatMap((c) => c.offers ?? []));
+  if (offered.size > 0) {
+    const searchable = [...offered].filter((g) => SEARCHABLE_BOOKING_GROUPS.has(g as never));
+    lines.push(
+      "",
+      "Parks Canada has different kinds of stay. Here you can search " +
+        `${searchable.join(" and ")} — for accommodations (oTENTik, cabin, yurt) ` +
+        "pass category = accommodation; for group sites pass category = group; " +
+        "otherwise it searches regular campsites.",
+    );
   }
   lines.push(
     "",
@@ -167,16 +189,34 @@ export function formatEquipmentTypes(types: EquipmentType[]): string {
   return lines.join("\n");
 }
 
+const CATEGORY_NOUN: Record<string, string> = {
+  campsite: "campsites",
+  group: "group sites",
+  accommodation: "accommodations (oTENTik, cabin, yurt)",
+};
+
 export function formatSearchSites(
   sites: AvailableSite[],
-  opts: { stay: string; partySize: number; accessibleOnly: boolean },
+  opts: {
+    stay: string;
+    partySize: number;
+    accessibleOnly: boolean;
+    category?: string;
+    offers?: string[];
+  },
 ): string {
   if (sites.length === 0) {
-    let msg = `No open sites were found in that campground for ${opts.stay}, party of ${opts.partySize}`;
+    const noun = CATEGORY_NOUN[opts.category ?? "campsite"] ?? "sites";
+    let msg = `No open ${noun} were found in that campground for ${opts.stay}, party of ${opts.partySize}`;
     msg += opts.accessibleOnly ? " (accessible sites only)." : ".";
+    // Ground the citizen: name what this campground does offer, so an empty
+    // accommodation search doesn't look like the park has none at all.
+    if (opts.offers && opts.offers.length > 0) {
+      msg += ` This campground offers ${opts.offers.join(", ")}.`;
+    }
     msg +=
-      " Sites in popular parks fill quickly. You can ask me to watch this " +
-      "search and alert you if one opens up.";
+      " Sites in popular parks fill quickly — you can try other dates, or ask me " +
+      "to watch this search and alert you if one opens up.";
     return msg;
   }
 

@@ -69,6 +69,48 @@ export const ALL_SITE_CATEGORIES: ReadonlySet<number> = new Set<number>([
   ...CATEGORY_GROUPS.accommodation,
 ]);
 
+/**
+ * The four booking groups Parks Canada presents as top-level choices. We use
+ * these to *orient* a citizen ("Banff offers Frontcountry Camping and
+ * Accommodations") rather than to gate searches behind a forced menu.
+ */
+export const BOOKING_GROUP = {
+  frontcountry: "Frontcountry Camping",
+  accommodation: "Accommodations",
+  backcountry: "Backcountry",
+  dayUse: "Day Use",
+} as const;
+export type BookingGroup = (typeof BOOKING_GROUP)[keyof typeof BOOKING_GROUP];
+
+/** Booking groups this tool can actually search/book today (the rest are roadmap). */
+export const SEARCHABLE_BOOKING_GROUPS: ReadonlySet<BookingGroup> = new Set([
+  BOOKING_GROUP.frontcountry,
+  BOOKING_GROUP.accommodation,
+]);
+
+/** Frontcountry camping site categories (campsite + group + overflow + seasonal). */
+export const FRONTCOUNTRY_CATEGORIES: ReadonlySet<number> = new Set<number>([
+  ...CATEGORY_GROUPS.campsite,
+  ...CATEGORY_GROUPS.group,
+]);
+
+/**
+ * Classify a resource category into its user-facing booking group. The
+ * frontcountry/accommodation split is by explicit id (both are `resourceType` 0);
+ * backcountry/day-use fall out of `resourceType` (3 and 2). Returns undefined for
+ * categories that are not a bookable stay (e.g. Daily Fishing).
+ */
+export function bookingGroupForCategory(
+  categoryId: number,
+  resourceType?: number,
+): BookingGroup | undefined {
+  if (CATEGORY_GROUPS.accommodation.has(categoryId)) return BOOKING_GROUP.accommodation;
+  if (FRONTCOUNTRY_CATEGORIES.has(categoryId)) return BOOKING_GROUP.frontcountry;
+  if (resourceType === 3) return BOOKING_GROUP.backcountry;
+  if (resourceType === 2) return BOOKING_GROUP.dayUse;
+  return undefined;
+}
+
 // The non-group equipment category id used by availability and booking calls.
 export const NON_GROUP_EQUIPMENT = -32768;
 

@@ -24,6 +24,14 @@ export interface CampgroundRecord {
   resourceLocationId: number | string;
   name: string;
   rootMapId: number | string;
+  /** Resource categories this facility offers (from `facility.resourceCategoryIds`). */
+  offeredCategoryIds: number[];
+}
+
+/** Resource category metadata: display name + `resourceType` (0 site, 2 day-use, 3 backcountry). */
+export interface ResourceCategoryInfo {
+  name: string;
+  resourceType?: number;
 }
 
 export interface EquipmentRecord {
@@ -174,22 +182,25 @@ export class GoingToCampClient {
         resourceLocationId: facility["resourceLocationId"],
         name: (localized(facility["localizedValues"], "fullName") as string) ?? "",
         rootMapId: facility["rootMapId"],
+        offeredCategoryIds: categories,
       });
     }
     return out;
   }
 
-  /** Resource categories: `resourceCategoryId` → display name (Campsite, oTENTik,
-   *  Cabin, Group, …). Lets search label each site by what it actually is. */
-  async listResourceCategories(): Promise<Map<number, string>> {
+  /** Resource categories: `resourceCategoryId` → name + `resourceType` (Campsite,
+   *  oTENTik, Cabin, Group, …). Lets search label sites and classify offerings. */
+  async listResourceCategories(): Promise<Map<number, ResourceCategoryInfo>> {
     const data = (await this.get("/api/resourcecategory")) as
       | Array<Record<string, any>>
       | null;
-    const out = new Map<number, string>();
+    const out = new Map<number, ResourceCategoryInfo>();
     for (const c of data ?? []) {
       const id = c["resourceCategoryId"];
       const name = localized(c["localizedValues"], "name") as string | undefined;
-      if (typeof id === "number" && name) out.set(id, name);
+      if (typeof id === "number" && name) {
+        out.set(id, { name, resourceType: c["resourceType"] });
+      }
     }
     return out;
   }
