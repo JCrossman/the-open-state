@@ -313,6 +313,12 @@ export class GoingToCampClient {
     return data as Record<string, any>;
   }
 
+  /** Read a cart back by its ids — used to confirm a commit actually landed. */
+  async getCart(cartUid: string, cartTransactionUid: string): Promise<Record<string, any> | null> {
+    const data = (await this.get("/api/cart/get", { cartUid, cartTransactionUid })) as unknown;
+    return data && typeof data === "object" ? (data as Record<string, any>) : null;
+  }
+
   /**
    * Commit a booking cart. The wizard re-commits the whole cart object at each
    * step; `isCompleted=false` advances toward (but never past) payment — payment

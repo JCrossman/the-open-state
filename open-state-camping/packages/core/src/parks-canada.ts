@@ -310,6 +310,11 @@ export class ParksCanadaProvider {
     return this.client.newCartTransaction(cartUid);
   }
 
+  /** Read a cart back, to confirm a booking actually landed in it. */
+  getCart(cartUid: string, cartTransactionUid: string): Promise<Record<string, any> | null> {
+    return this.client.getCart(cartUid, cartTransactionUid);
+  }
+
   /** Commit a booking cart (after the citizen confirms; never past payment). */
   commitCart(
     cart: { cart: Record<string, any> },

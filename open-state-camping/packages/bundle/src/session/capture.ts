@@ -92,14 +92,23 @@ export async function captureSession(opts: CaptureOptions = {}): Promise<Session
 /**
  * Open the citizen's Chrome at their cart so they review the prepared booking and
  * pay themselves. We assemble everything up to payment via the API; entering a
- * card is the one step we never take for them (Constitution Art. 2). Uses the same
- * persistent profile as sign-in, so the cart we built under their session is
- * already there. The window is left open for them; we don't await its close.
+ * card is the one step we never take for them (Constitution Art. 2).
+ *
+ * The booking is committed under the citizen's session, but the SPA decides which
+ * cart to show from `localStorage` (`cartUid` / `cartTransactionUid`) — so we seed
+ * those keys with the cart we built before loading /cart, otherwise the page shows
+ * a fresh empty cart. Uses the same persistent profile as sign-in (same session).
+ * The window is left open for them; we don't await its close.
  */
 export async function openCheckout(
-  opts: CaptureOptions & { cartUrl?: string } = {},
+  opts: CaptureOptions & {
+    cartUrl?: string;
+    cartUid?: string;
+    cartTransactionUid?: string;
+  } = {},
 ): Promise<void> {
-  const cartUrl = opts.cartUrl ?? "https://reservation.pc.gc.ca/cart";
+  const origin = "https://reservation.pc.gc.ca";
+  const cartUrl = opts.cartUrl ?? `${origin}/cart`;
   const profileDir = opts.profileDir ?? join(defaultVaultDir(), "browser-profile");
   const puppeteer = (await import("puppeteer-core")).default;
   const browser = await puppeteer.launch({
@@ -111,6 +120,23 @@ export async function openCheckout(
     args: ["--disable-blink-features=AutomationControlled", "--disable-infobars", "--start-maximized"],
   });
   const page = (await browser.pages())[0] ?? (await browser.newPage());
+  if (opts.cartUid) {
+    // Establish the origin so localStorage is the reservation site's, then point
+    // the SPA at the cart we built (its keys are literally "cartUid"/"cartTransactionUid").
+    await page.goto(`${origin}/`, { waitUntil: "domcontentloaded" });
+    await page.evaluate(
+      (cartUid: string, cartTransactionUid: string) => {
+        try {
+          localStorage.setItem("cartUid", cartUid);
+          if (cartTransactionUid) localStorage.setItem("cartTransactionUid", cartTransactionUid);
+        } catch {
+          /* localStorage may be unavailable; the cart link still works */
+        }
+      },
+      opts.cartUid,
+      opts.cartTransactionUid ?? "",
+    );
+  }
   await page.goto(cartUrl, { waitUntil: "domcontentloaded" });
   // Intentionally leave the browser open so the citizen can complete payment.
 }

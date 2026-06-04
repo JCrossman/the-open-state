@@ -156,8 +156,22 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
         }
       }
 
+      const cartUid = String(base["cartUid"]);
+      const cartTransactionUid = String(base["newTransaction"]?.["cartTransactionUid"] ?? "");
+
+      // Confirm the booking actually landed in the cart server-side (separates a
+      // commit that didn't persist from a browser hand-off that showed the wrong cart).
+      let bookingCount = -1;
       try {
-        await openCheckout();
+        const saved = await provider.getCart(cartUid, cartTransactionUid);
+        const bookings = saved?.["bookings"];
+        if (Array.isArray(bookings)) bookingCount = bookings.length;
+      } catch {
+        /* verification is best-effort */
+      }
+
+      try {
+        await openCheckout({ cartUid, cartTransactionUid });
       } catch (err) {
         return text(
           summary +
@@ -167,12 +181,24 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
         );
       }
 
+      if (bookingCount === 0) {
+        return text(
+          summary +
+            "\n\nI sent the booking to Parks Canada without an error, but when I read " +
+            "your cart back it was empty — so it didn't actually hold. Nothing was " +
+            "reserved or charged. This is a bug on my side; please let me know so I " +
+            `can fix it. (cart ${cartUid})`,
+        );
+      }
+
       return text(
         summary +
-          "\n\nYour cart is ready. I've opened Parks Canada in your browser at your " +
-          "cart — review it and enter payment there to confirm. Nothing is reserved " +
-          "until you pay, and I never handle your card. The held site will release " +
-          "on its own if you don't complete payment.",
+          "\n\nYour cart is ready" +
+          (bookingCount > 0 ? " (I confirmed the site is held in your cart)" : "") +
+          ". I've opened Parks Canada in your browser at your cart — review it and " +
+          "enter payment there to confirm. Nothing is reserved until you pay, and I " +
+          "never handle your card. The held site will release on its own if you " +
+          "don't complete payment.",
       );
     },
   );
