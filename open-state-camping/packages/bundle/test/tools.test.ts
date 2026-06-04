@@ -119,6 +119,8 @@ describe("bundle MCP server", () => {
     });
     expect(out).toContain("marked accessible");
     expect(out).toMatch(/never books or pays/i);
+    // The stay carries a computed weekday, to ground the assistant's date sense.
+    expect(out).toMatch(/(Sun|Mon|Tue|Wed|Thu|Fri|Sat), 2099-07-17/);
   });
 
   it("search_park_availability consolidates and coerces ISO dates", async () => {

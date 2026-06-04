@@ -18,7 +18,9 @@ type TextResult = { content: { type: "text"; text: string }[] };
 const text = (s: string): TextResult => ({ content: [{ type: "text", text: s }] });
 
 function stay(start: string, end: string): string {
-  return `${start} to ${end}`;
+  // Include the weekday (computed, not guessed) so the assistant's date sense is
+  // grounded by the tool result rather than its own unreliable weekday arithmetic.
+  return `${fmt.withWeekday(start)} to ${fmt.withWeekday(end)}`;
 }
 
 /** Longest stay we treat as an exact "every night" search; longer ⇒ likely a range. */
@@ -108,7 +110,9 @@ export function registerTools(
         "June\"), also pass nights = how many nights you want, and openings " +
         "anywhere in the range are returned. Set accessible_only for sites " +
         "Parks Canada marks accessible. equipment_type takes a word like " +
-        '"tent" or "RV", or an equipment id from list_equipment_types.',
+        '"tent" or "RV", or an equipment id from list_equipment_types. ' +
+        "The result states each date's weekday (correctly computed) — use that " +
+        "and don't work out days of the week yourself, as that is error-prone.",
       inputSchema: {
         campground_id: z.string(),
         start_date: isoDate,
