@@ -58,6 +58,40 @@ export function registerTools(
   const recArea = config.recreationAreaId;
 
   server.registerTool(
+    "resolve_dates",
+    {
+      title: "Work out exact calendar dates",
+      description:
+        "Turn a citizen's dates into exact calendar dates, with the correct day " +
+        "of the week, before you search or book. ALWAYS use this when a citizen " +
+        "gives a date — especially a bare one like 'June 16' or 'next Friday' — " +
+        "and do NOT work out the year or the weekday yourself (that is error-prone " +
+        "for you). Give the month and day; leave year off to get the next upcoming " +
+        "occurrence (this runs on the citizen's machine, so it knows today's real " +
+        "date). Add nights for a stay to get the departure date too. Use the " +
+        "start_date and end_date it returns verbatim in search_sites / " +
+        "search_park_availability / prepare_booking.",
+      inputSchema: {
+        month: z.number().int().min(1).max(12).describe("Arrival month, 1-12."),
+        day: z.number().int().min(1).max(31).describe("Arrival day of month, 1-31."),
+        year: z
+          .number()
+          .int()
+          .optional()
+          .describe("Arrival year. Leave off for the next upcoming occurrence."),
+        nights: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe("Number of nights, to also compute the departure date."),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async (args) => text(fmt.resolveDates(args)),
+  );
+
+  server.registerTool(
     "search_parks",
     {
       title: "Find a Parks Canada campground",

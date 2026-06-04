@@ -31,10 +31,33 @@ export function weekday(iso: ISODate): number {
 }
 
 const WEEKDAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+const WEEKDAY_LONG = [
+  "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
+] as const;
 
 /** Short weekday label for a date, e.g. "Wed". */
 export function weekdayName(iso: ISODate): string {
   return WEEKDAY_NAMES[weekday(iso)]!;
+}
+
+/** Full weekday name for a date, e.g. "Wednesday". */
+export function weekdayLongName(iso: ISODate): string {
+  return WEEKDAY_LONG[weekday(iso)]!;
+}
+
+/**
+ * Build a valid ISO date from numeric parts, or null if the day overflows the
+ * month (e.g. Feb 30). Computed in UTC; verifies the parts round-trip so an
+ * out-of-range day is caught rather than silently rolled into the next month.
+ */
+export function isoFromParts(year: number, month: number, day: number): ISODate | null {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const dt = new Date(Date.UTC(year, month - 1, day));
+  if (dt.getUTCFullYear() !== year || dt.getUTCMonth() !== month - 1 || dt.getUTCDate() !== day) {
+    return null;
+  }
+  return fromUTCDate(dt);
 }
 
 /** Today's date (UTC) as an ISO string — the tool runs on the citizen's machine,

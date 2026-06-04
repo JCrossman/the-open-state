@@ -6,7 +6,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { GoingToCampClient, ParksCanadaProvider, type FetchLike } from "@open-state/core";
 import { createServerForProvider } from "../src/server.js";
 import { flexibleRangeHint } from "../src/tools.js";
-import { stayDatesProblem } from "../src/format.js";
+import { resolveDates, stayDatesProblem } from "../src/format.js";
 import { normalizePhone } from "../src/account-tools.js";
 
 const CAMPGROUND_ID = "-2147483644";
@@ -89,7 +89,7 @@ async function callText(
 }
 
 describe("bundle MCP server", () => {
-  it("exposes the six read tools", async () => {
+  it("exposes the read tools", async () => {
     const client = await connectClient();
     const tools = (await client.listTools()).tools.map((t) => t.name).sort();
     expect(tools).toEqual(
@@ -97,6 +97,7 @@ describe("bundle MCP server", () => {
         "get_site_details",
         "list_equipment_types",
         "prepare_booking_url",
+        "resolve_dates",
         "search_park_availability",
         "search_parks",
         "search_sites",
@@ -180,6 +181,38 @@ describe("phone normalization (E.164 for Parks Canada)", () => {
     ["+1 587 986 5992", "+15879865992"],
   ])("normalizes %s -> %s", (input, expected) => {
     expect(normalizePhone(input)).toBe(expected);
+  });
+});
+
+describe("resolve_dates (date oracle)", () => {
+  it("computes the weekday and departure for a stay", () => {
+    // 2099-07-17 is a known weekday; +2 nights = 2099-07-19.
+    const out = resolveDates({ month: 7, day: 17, year: 2099, nights: 2 });
+    expect(out).toContain("Arrival:");
+    expect(out).toContain("2099-07-17");
+    expect(out).toContain("Departure:");
+    expect(out).toContain("2099-07-19");
+    expect(out).toMatch(/start_date: 2099-07-17/);
+    expect(out).toMatch(/end_date: 2099-07-19/);
+    // a real weekday name is present (not guessed)
+    expect(out).toMatch(/(Sun|Mon|Tues|Wednes|Thurs|Fri|Satur)day/);
+  });
+
+  it("resolves the year to an upcoming occurrence when omitted (never the past)", () => {
+    const out = resolveDates({ month: 7, day: 17 });
+    const m = out.match(/start_date: (\d{4})-07-17/);
+    expect(m).toBeTruthy();
+    const today = new Date().toISOString().slice(0, 10);
+    expect(`${m![1]}-07-17` >= today).toBe(true);
+  });
+
+  it("warns when an explicit year puts the date in the past", () => {
+    const out = resolveDates({ month: 6, day: 16, year: 2020 });
+    expect(out).toMatch(/in the past/i);
+  });
+
+  it("rejects an impossible date", () => {
+    expect(resolveDates({ month: 2, day: 30 })).toMatch(/isn't a real date/i);
   });
 });
 

@@ -6,8 +6,11 @@ import {
   InvalidInputError,
   QueueItError,
   UpstreamError,
+  addDays,
+  isoFromParts,
   nextOccurrence,
   todayUTC,
+  weekdayLongName,
   weekdayName,
   type AvailableSite,
   type CampgroundAvailability,
@@ -15,6 +18,58 @@ import {
   type RecreationArea,
   type SiteDetails,
 } from "@open-state/core";
+
+/**
+ * Resolve a citizen's date (month/day, optional year) into exact calendar dates
+ * with the correct weekday — the date arithmetic the assistant is unreliable at.
+ * Year omitted → the next upcoming occurrence (this runs on the citizen's machine,
+ * so "today" is real). `nights` also yields the departure date.
+ */
+export function resolveDates(args: {
+  month: number;
+  day: number;
+  year?: number;
+  nights?: number;
+}): string {
+  const today = todayUTC();
+  const todayYear = Number(today.slice(0, 4));
+  // Pick the year: the one given, else this year — or next year if that day has
+  // already passed.
+  let year = args.year ?? todayYear;
+  if (args.year == null) {
+    const thisYear = isoFromParts(todayYear, args.month, args.day);
+    if (thisYear && thisYear < today) year = todayYear + 1;
+  }
+  const start = isoFromParts(year, args.month, args.day);
+  if (!start) {
+    return (
+      `That isn't a real date (month ${args.month}, day ${args.day}). ` +
+      `Give a month 1-12 and a day that exists in it.`
+    );
+  }
+
+  const lines = [`Today is ${weekdayLongName(today)}, ${today}.`, ""];
+  lines.push(`Arrival: ${weekdayLongName(start)}, ${start}`);
+  let end: string | null = null;
+  if (args.nights != null) {
+    end = addDays(start, args.nights);
+    lines.push(
+      `Departure: ${weekdayLongName(end)}, ${end} ` +
+        `(${args.nights} night${args.nights === 1 ? "" : "s"})`,
+    );
+  }
+  if (start < today) {
+    lines.push(
+      "",
+      `Heads up: that arrival is in the past. The next ${args.month}/${args.day} is ` +
+        `${withWeekday(nextOccurrence(start))} — leave the year off to use it.`,
+    );
+  }
+  lines.push("", "Use these exact dates when searching or booking:");
+  lines.push(`- start_date: ${start}`);
+  if (end) lines.push(`- end_date: ${end}`);
+  return lines.join("\n");
+}
 
 /** A date with its weekday, e.g. "Wed, 2026-06-17" — grounds the assistant,
  *  which can otherwise confabulate the weekday or year from a bare date. */
