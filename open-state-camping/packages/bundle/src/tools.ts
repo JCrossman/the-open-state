@@ -248,8 +248,9 @@ export function registerTools(
       title: "Get campsite details",
       description:
         "Get plain-language detail about one campsite, including accessibility. " +
-        "Set include_photos to also return the site's photos as viewable images " +
-        "(up to three); otherwise photo links are listed.",
+        "The site's photos are shown inline in the conversation by default (so the " +
+        "citizen sees them without hunting for a side panel). Pass " +
+        "include_photos: false only if they explicitly don't want photos.",
       inputSchema: {
         campground_id: z.string(),
         campsite_id: z.string(),
@@ -265,20 +266,29 @@ export function registerTools(
           campgroundId: args.campground_id,
           campsiteId: args.campsite_id,
         });
+        const siteLabel = details.siteName ? `Site ${details.siteName}` : "This site";
         const content: Array<
           | { type: "text"; text: string }
           | { type: "image"; data: string; mimeType: string }
         > = [{ type: "text", text: fmt.formatSiteDetails(details) }];
 
-        if (args.include_photos && details.photos.length > 0) {
+        // Photos inline by default. Interleave a caption before each image so they
+        // sit in the chat flow with screen-reader context, rather than being
+        // collected into a side gallery the citizen has to open.
+        if (args.include_photos !== false && details.photos.length > 0) {
           const images = await fetchPhotos(provider, details.photos, 3);
           if (images.length > 0) {
-            content.push(...images);
+            images.forEach((img, i) => {
+              content.push({
+                type: "text",
+                text: `${siteLabel} — photo ${i + 1} of ${images.length}:`,
+              });
+              content.push(img);
+            });
           } else {
+            // Couldn't fetch the images — fall back to links so nothing is lost.
             content.push({ type: "text", text: fmt.formatPhotoLinks(details.photos) });
           }
-        } else {
-          content.push({ type: "text", text: fmt.formatPhotoLinks(details.photos) });
         }
         return { content };
       } catch (e) {

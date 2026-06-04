@@ -2,9 +2,9 @@
   "manifest_version": "0.3",
   "name": "open-state-camping",
   "display_name": "The Open State: Camping",
-  "version": "0.6.0",
-  "description": "Find and book Parks Canada campsites in plain language, accessibly — from your own machine.",
-  "long_description": "An independent, public-interest assistive tool. It searches Parks Canada campsite availability in plain language, puts accessibility first, and runs entirely on your own device so your searches come from your own connection. It is not operated by or endorsed by Parks Canada. It never stores your government login and never books on its own — you confirm everything yourself.",
+  "version": "0.6.1",
+  "description": "Find and book Parks Canada campsites in plain language, accessibly \u2014 from your own machine.",
+  "long_description": "An independent, public-interest assistive tool. It searches Parks Canada campsite availability in plain language, puts accessibility first, and runs entirely on your own device so your searches come from your own connection. It is not operated by or endorsed by Parks Canada. It never stores your government login and never books on its own \u2014 you confirm everything yourself.",
   "author": {
     "name": "The Open State"
   },
@@ -41,11 +41,11 @@
     },
     {
       "name": "get_site_details",
-      "description": "Plain-language detail about one campsite, including accessibility and photos."
+      "description": "Plain-language detail about one campsite, including accessibility and photos shown inline in the conversation."
     },
     {
       "name": "prepare_booking_url",
-      "description": "Fallback only — prefer prepare_booking, which completes the reservation up to payment. Use this link only if prepare_booking can't be used."
+      "description": "Fallback only \u2014 prefer prepare_booking, which completes the reservation up to payment. Use this link only if prepare_booking can't be used."
     },
     {
       "name": "connect_account",
@@ -73,7 +73,7 @@
     },
     {
       "name": "prepare_booking",
-      "description": "Book or reserve a campsite: completes the reservation through Parks Canada up to the payment screen, then opens your cart so you review and pay. Use this to book — not a website link. Nothing is held or charged until you pay."
+      "description": "Book or reserve a campsite: completes the reservation through Parks Canada up to the payment screen, then opens your cart so you review and pay. Use this to book \u2014 not a website link. Nothing is held or charged until you pay."
     },
     {
       "name": "debug_account_shape",
