@@ -300,6 +300,11 @@ export class ParksCanadaProvider {
     return this.client.getShopperEnvelope();
   }
 
+  /** Get a fresh cart (server-issued cartUid) to begin a booking. */
+  getNewCart(): Promise<Record<string, any>> {
+    return this.client.getNewCart();
+  }
+
   /** Start a server-issued cart transaction (the real cart skeleton to book into). */
   newCartTransaction(cartUid: string): Promise<Record<string, any>> {
     return this.client.newCartTransaction(cartUid);

@@ -60,19 +60,17 @@ export interface BookingRequest {
  * locally before the first commit (the first commit *is* the hold); we do the same.
  */
 export interface BookingIds {
-  cartUid: string;
   bookingUid: string;
   resourceBlockerUid: string;
 }
 
 /**
- * Mint the client-generated cart GUIDs. `cartUid` is used to start the server
- * transaction (GET /api/cart/newtransaction); the server assigns the
- * `cartTransactionUid`, so we don't generate that one.
+ * Mint the client-generated GUIDs for a booking. The `cartUid` and
+ * `cartTransactionUid` are *server*-issued (GET /api/cart → GET
+ * /api/cart/newtransaction), so we only generate the booking and blocker ids.
  */
 export function newBookingIds(): BookingIds {
   return {
-    cartUid: randomUUID(),
     bookingUid: randomUUID(),
     resourceBlockerUid: randomUUID(),
   };
@@ -304,7 +302,7 @@ export function buildBookingCart(
   stage: BookingStage = "finalize",
 ): { cart: Record<string, any> } {
   const cart = base;
-  const cartUid = (cart["cartUid"] as string) ?? ids.cartUid;
+  const cartUid = cart["cartUid"] as string;
   const cartTransactionUid =
     (cart["newTransaction"]?.["cartTransactionUid"] as string) ??
     (cart["createTransactionUid"] as string);

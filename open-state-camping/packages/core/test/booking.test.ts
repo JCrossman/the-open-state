@@ -34,7 +34,6 @@ const capturedNV = capturedBooking.newVersion;
 /** Reconstruct the inputs the wizard had, from the captured cart. */
 const envelope: ShopperEnvelope = captured.shopper;
 const ids: BookingIds = {
-  cartUid: captured.cartUid,
   bookingUid: capturedBooking.bookingUid,
   resourceBlockerUid: captured.resourceBlockers[0].resourceBlockerUid,
 };
@@ -165,10 +164,10 @@ describe("booking cart assembly — wizard stages", () => {
 });
 
 describe("booking ids", () => {
-  it("mints three distinct client GUIDs (the server assigns the transaction id)", () => {
+  it("mints two distinct client GUIDs (the server assigns cart + transaction ids)", () => {
     const ids = newBookingIds();
     const values = Object.values(ids);
-    expect(new Set(values).size).toBe(3);
+    expect(new Set(values).size).toBe(2);
     for (const v of values) {
       expect(v).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
     }

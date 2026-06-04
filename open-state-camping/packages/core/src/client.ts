@@ -282,10 +282,24 @@ export class GoingToCampClient {
   }
 
   /**
-   * Start a new cart transaction. The platform initializes the transaction
-   * server-side (assigning `cartTransactionUid`, `shiftUid`, `userUid`,
-   * `referenceNumberPrefix`, the online terminal id, …) and returns the cart
-   * skeleton. The booking is then added to *this* real cart and committed —
+   * Get a fresh cart from the platform. `GET /api/cart` returns a cart whose
+   * `cartUid` the **server** generates — the booking flow needs this server id
+   * (a client-minted one is rejected). Mirrors the SPA's `initializeNewCart`.
+   */
+  async getNewCart(): Promise<Record<string, any>> {
+    const data = (await this.get("/api/cart")) as unknown;
+    if (!data || typeof data !== "object") {
+      throw new UpstreamError("The Parks Canada booking system did not start a cart.");
+    }
+    return data as Record<string, any>;
+  }
+
+  /**
+   * Start a new cart transaction for a server-issued `cartUid` (from getNewCart).
+   * The platform initializes the transaction server-side (assigning
+   * `cartTransactionUid`, `shiftUid`, `userUid`, `referenceNumberPrefix`, the
+   * online terminal id, …) and returns the cart skeleton. The booking is then
+   * added to *this* real cart and committed —
    * fabricating the transaction ourselves is rejected with a bare HTTP 400.
    * Mirrors the SPA's `initializeNewCartTransaction` (GET /api/cart/newtransaction).
    */
