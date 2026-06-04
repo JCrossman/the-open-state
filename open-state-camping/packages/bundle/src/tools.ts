@@ -290,23 +290,26 @@ export function registerTools(
         } else {
           const photos = await fetchPhotos(provider, details.photos, 3);
           if (photos.length > 0) {
-            // The image blocks let the assistant SEE the photos (to describe them).
+            // Return the images as blocks — claude.ai shows these in its Content
+            // panel. We deliberately do NOT emit markdown image / link syntax for
+            // the assistant to paste, because remote image links render as
+            // click-to-load tiles that pop a browser window (a worse experience).
             for (const { image } of photos) content.push(image);
-            // Ready-to-paste markdown so the assistant can show them INLINE in its
-            // reply — claude.ai renders markdown images in the message, unlike tool
-            // image blocks (which it currently tucks into a side panel).
-            const embeds = photos
-              .map(({ url }, i) => `![${siteLabel} — photo ${i + 1}](${url})`)
-              .join("\n");
             content.push({
               type: "text",
               text:
-                `To show these ${photos.length} photo(s) to the citizen inline, put ` +
-                `this markdown in your reply, then describe what they show:\n${embeds}`,
+                `${photos.length} photo(s) of ${siteLabel.toLowerCase()} are attached ` +
+                "(they appear in the citizen's Content panel). Describe what they " +
+                "show — how exposed, treed, level, or private the site looks — so the " +
+                "citizen gets the picture without opening anything. Do NOT paste the " +
+                "image links or markdown into your reply.",
             });
           } else {
-            // Photos exist but couldn't be fetched — fall back to links.
-            content.push({ type: "text", text: fmt.formatPhotoLinks(details.photos) });
+            // Photos exist but couldn't be fetched — note it; don't push raw links.
+            content.push({
+              type: "text",
+              text: "This site has photos, but I couldn't load them just now.",
+            });
           }
         }
         return { content };
