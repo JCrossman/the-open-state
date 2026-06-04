@@ -4,10 +4,13 @@
  * Accessibility is first-class and filterable (Constitution Art. 3).
  */
 import {
+  BOOKING_CATEGORY_ID,
+  CATEGORY_GROUPS,
   PARKS_CANADA_HOSTNAME,
   PARKS_CANADA_NAME,
   PARKS_CANADA_REC_AREA_ID,
   SERVICE_TYPE_ATTR,
+  type CategoryGroup,
 } from "./constants.js";
 import {
   GoingToCampClient,
@@ -45,6 +48,9 @@ export interface SearchSitesOptions {
   accessibleOnly?: boolean;
   nights?: number | null;
   weekendsOnly?: boolean;
+  /** Which kind of stay: frontcountry campsites (default), group sites, or roofed
+   *  accommodations (oTENTik, cabin, yurt, …). Filters results by resource category. */
+  category?: CategoryGroup;
 }
 
 export interface SearchParkAvailabilityOptions {
@@ -56,6 +62,7 @@ export interface SearchParkAvailabilityOptions {
   accessibleOnly?: boolean;
   nights?: number | null;
   weekendsOnly?: boolean;
+  category?: CategoryGroup;
 }
 
 export class ParksCanadaProvider {
@@ -65,6 +72,7 @@ export class ParksCanadaProvider {
   private campgroundsCache?: CampgroundRecord[];
   private attrDefsCache?: Record<string, any>;
   private equipmentCache?: EquipmentRecord[];
+  private resourceCategoriesCache?: Map<number, string>;
 
   constructor(
     opts: {
@@ -127,6 +135,7 @@ export class ParksCanadaProvider {
         `Could not find a Parks Canada campground with id ${opts.campgroundId}.`,
       );
     }
+    const group = opts.category ?? "campsite";
     const equipmentId = await this.resolveEquipmentId(opts.equipmentType);
     const resources = await this.client.getResources(opts.campgroundId);
     const daily = await this.client.dailyAvailability({
@@ -135,10 +144,15 @@ export class ParksCanadaProvider {
       startDate: opts.startDate,
       endDate: opts.endDate,
       equipmentId,
+      bookingCategoryId: BOOKING_CATEGORY_ID[group],
     });
     const window = windowNights(opts.startDate, opts.endDate);
     const campgroundName = await this.campgroundName(opts.campgroundId);
     const defs = await this.attrDefs();
+    // Keep only the kind of stay asked for (campsites by default); each resource
+    // carries a resourceCategoryId that tells campsite vs group vs accommodation.
+    const wantCategories = CATEGORY_GROUPS[group];
+    const categoryNames = await this.resourceCategories();
     const bookingUrl = this.client.buildBookingUrl({
       mapId: rootMapId,
       resourceLocationId: opts.campgroundId,
@@ -152,6 +166,8 @@ export class ParksCanadaProvider {
     for (const [resourceId, dayCodes] of Object.entries(daily)) {
       const resource = resources[resourceId];
       if (!resource) continue;
+      const categoryId = resource["resourceCategoryId"] as number | undefined;
+      if (categoryId == null || !wantCategories.has(categoryId)) continue;
       const { qualifies, dates } = evaluateStay(
         openNights(window, dayCodes),
         window,
@@ -175,7 +191,7 @@ export class ParksCanadaProvider {
         siteName: resourceName(resource) ?? resourceId,
         accessible,
         availableDates: dates,
-        siteType: serviceTypeLabel(resource, defs),
+        siteType: categoryNames.get(categoryId) ?? serviceTypeLabel(resource, defs),
         maxOccupancy: maxOccupancy ?? undefined,
         bookingUrl,
       });
@@ -210,6 +226,7 @@ export class ParksCanadaProvider {
           accessibleOnly: opts.accessibleOnly,
           nights: opts.nights,
           weekendsOnly: opts.weekendsOnly,
+          category: opts.category,
         });
         results.push({
           provider: PROVIDER_NAME,
@@ -370,6 +387,14 @@ export class ParksCanadaProvider {
       this.equipmentCache = await this.client.listEquipmentTypes();
     }
     return this.equipmentCache;
+  }
+
+  /** Cached resourceCategoryId → name map (Campsite, oTENTik, Cabin, Group, …). */
+  private async resourceCategories(): Promise<Map<number, string>> {
+    if (!this.resourceCategoriesCache) {
+      this.resourceCategoriesCache = await this.client.listResourceCategories();
+    }
+    return this.resourceCategoriesCache;
   }
 
   private async attrDefs(): Promise<Record<string, any>> {

@@ -1,242 +1,247 @@
 {
- "-2147475789": {
-  "resourceId": -2147475789,
-  "resourceLocationId": -2147483644,
-  "localizedValues": [
-   {
-    "cultureName": "fr-CA",
-    "name": "104",
-    "description": ""
-   },
-   {
-    "cultureName": "en-CA",
-    "name": "104",
-    "description": ""
-   }
-  ],
-  "minCapacity": null,
-  "maxCapacity": 6,
-  "maxAdultCapacity": null,
-  "definedAttributes": [
-   {
-    "attributeDefinitionId": -32768,
-    "attributeId": -2147322529,
-    "attributeVisibility": 0,
-    "value": null,
-    "values": [
-     32
-    ]
-   },
-   {
-    "attributeDefinitionId": -32756,
-    "attributeId": -2147322518,
-    "attributeVisibility": 0,
-    "value": null,
-    "values": [
-     0
-    ]
-   }
-  ],
-  "photos": [
-   {
-    "photoUrlResult": {
-     "avifUrl": "https://reservation.pc.gc.ca/images/4b8d6115-650d-42dc-a3b3-92e4f07d4a68.avif",
-     "url": "https://reservation.pc.gc.ca/images/4b8d6115-650d-42dc-a3b3-92e4f07d4a68.jpg"
-    },
-    "aspectType": 0
-   }
-  ]
- },
- "-2147475825": {
-  "resourceId": -2147475825,
-  "resourceLocationId": -2147483644,
-  "localizedValues": [
-   {
-    "cultureName": "fr-CA",
-    "name": "105",
-    "description": ""
-   },
-   {
-    "cultureName": "en-CA",
-    "name": "105",
-    "description": ""
-   }
-  ],
-  "minCapacity": null,
-  "maxCapacity": 6,
-  "maxAdultCapacity": null,
-  "definedAttributes": [
-   {
-    "attributeDefinitionId": -32756,
-    "attributeId": -2147323199,
-    "attributeVisibility": 0,
-    "value": null,
-    "values": [
-     0
-    ]
-   },
-   {
-    "attributeDefinitionId": -32768,
-    "attributeId": -2147323188,
-    "attributeVisibility": 0,
-    "value": null,
-    "values": [
-     32
-    ]
-   }
-  ],
-  "photos": [
-   {
-    "photoUrlResult": {
-     "avifUrl": "https://reservation.pc.gc.ca/images/45c6913b-f930-4db2-bc57-348c4cbd9b5b.avif",
-     "url": "https://reservation.pc.gc.ca/images/45c6913b-f930-4db2-bc57-348c4cbd9b5b.jpg"
-    },
-    "aspectType": 0
-   }
-  ]
- },
- "-2147475657": {
-  "resourceId": -2147475657,
-  "resourceLocationId": -2147483644,
-  "localizedValues": [
-   {
-    "cultureName": "fr-CA",
-    "name": "101",
-    "description": ""
-   },
-   {
-    "cultureName": "en-CA",
-    "name": "101",
-    "description": ""
-   }
-  ],
-  "minCapacity": null,
-  "maxCapacity": 6,
-  "maxAdultCapacity": null,
-  "definedAttributes": [
-   {
-    "attributeDefinitionId": -32768,
-    "attributeId": -2147320084,
-    "attributeVisibility": 0,
-    "value": null,
-    "values": [
-     30
-    ]
-   },
-   {
-    "attributeDefinitionId": -32756,
-    "attributeId": -2147211880,
-    "attributeVisibility": 0,
-    "value": null,
-    "values": [
-     1
-    ]
-   }
-  ],
-  "photos": [
-   {
-    "photoUrlResult": {
-     "avifUrl": "https://reservation.pc.gc.ca/images/4683a8a6-5030-40e1-8531-cb29bc0211c6.avif",
-     "url": "https://reservation.pc.gc.ca/images/4683a8a6-5030-40e1-8531-cb29bc0211c6.jpg"
-    },
-    "aspectType": 0
-   }
-  ]
- },
- "-2147475635": {
-  "resourceId": -2147475635,
-  "resourceLocationId": -2147483644,
-  "localizedValues": [
-   {
-    "cultureName": "fr-CA",
-    "name": "112",
-    "description": ""
-   },
-   {
-    "cultureName": "en-CA",
-    "name": "112",
-    "description": ""
-   }
-  ],
-  "minCapacity": null,
-  "maxCapacity": 6,
-  "maxAdultCapacity": null,
-  "definedAttributes": [
-   {
-    "attributeDefinitionId": -32768,
-    "attributeId": -2147319418,
-    "attributeVisibility": 0,
-    "value": null,
-    "values": [
-     30
-    ]
-   },
-   {
-    "attributeDefinitionId": -32756,
-    "attributeId": -2147211876,
-    "attributeVisibility": 0,
-    "value": null,
-    "values": [
-     1
-    ]
-   }
-  ],
-  "photos": [
-   {
-    "photoUrlResult": {
-     "avifUrl": "https://reservation.pc.gc.ca/images/3acb4a09-cb77-4036-a2a4-9f06f4295e6c.avif",
-     "url": "https://reservation.pc.gc.ca/images/3acb4a09-cb77-4036-a2a4-9f06f4295e6c.jpg"
-    },
-    "aspectType": 0
-   }
-  ]
- },
- "-2147475943": {
-  "resourceId": -2147475943,
-  "resourceLocationId": -2147483644,
-  "localizedValues": [
-   {
-    "cultureName": "fr-CA",
-    "name": "403",
-    "description": ""
-   },
-   {
-    "cultureName": "en-CA",
-    "name": "403",
-    "description": ""
-   }
-  ],
-  "minCapacity": null,
-  "maxCapacity": 6,
-  "maxAdultCapacity": null,
-  "definedAttributes": [
-   {
-    "attributeDefinitionId": -32768,
-    "attributeId": -2147325392,
-    "attributeVisibility": 0,
-    "value": null,
-    "values": [
-     30
-    ]
-   },
-   {
-    "attributeDefinitionId": -32756,
-    "attributeId": -2147211766,
-    "attributeVisibility": 0,
-    "value": null,
-    "values": [
-     1
-    ]
-   }
-  ],
-  "photos": [
-   {
-    "photoUrlResult": {
-     "avifUrl": "https://reservation.pc.gc.ca/images/92e1ed7e-37a4-4907-b6f2-f7af08a3618d.avif",
-     "url": "https://reservation.pc.gc.ca/images/92e1ed7e-37a4-4907-b6f2-f7af08a3618d.jpg"
-    },
-    "aspectType": 0
-   }
-  ]
- }
+  "-2147475789": {
+    "resourceId": -2147475789,
+    "resourceLocationId": -2147483644,
+    "localizedValues": [
+      {
+        "cultureName": "fr-CA",
+        "name": "104",
+        "description": ""
+      },
+      {
+        "cultureName": "en-CA",
+        "name": "104",
+        "description": ""
+      }
+    ],
+    "minCapacity": null,
+    "maxCapacity": 6,
+    "maxAdultCapacity": null,
+    "definedAttributes": [
+      {
+        "attributeDefinitionId": -32768,
+        "attributeId": -2147322529,
+        "attributeVisibility": 0,
+        "value": null,
+        "values": [
+          32
+        ]
+      },
+      {
+        "attributeDefinitionId": -32756,
+        "attributeId": -2147322518,
+        "attributeVisibility": 0,
+        "value": null,
+        "values": [
+          0
+        ]
+      }
+    ],
+    "photos": [
+      {
+        "photoUrlResult": {
+          "avifUrl": "https://reservation.pc.gc.ca/images/4b8d6115-650d-42dc-a3b3-92e4f07d4a68.avif",
+          "url": "https://reservation.pc.gc.ca/images/4b8d6115-650d-42dc-a3b3-92e4f07d4a68.jpg"
+        },
+        "aspectType": 0
+      }
+    ],
+    "resourceCategoryId": -2147483648
+  },
+  "-2147475825": {
+    "resourceId": -2147475825,
+    "resourceLocationId": -2147483644,
+    "localizedValues": [
+      {
+        "cultureName": "fr-CA",
+        "name": "105",
+        "description": ""
+      },
+      {
+        "cultureName": "en-CA",
+        "name": "105",
+        "description": ""
+      }
+    ],
+    "minCapacity": null,
+    "maxCapacity": 6,
+    "maxAdultCapacity": null,
+    "definedAttributes": [
+      {
+        "attributeDefinitionId": -32756,
+        "attributeId": -2147323199,
+        "attributeVisibility": 0,
+        "value": null,
+        "values": [
+          0
+        ]
+      },
+      {
+        "attributeDefinitionId": -32768,
+        "attributeId": -2147323188,
+        "attributeVisibility": 0,
+        "value": null,
+        "values": [
+          32
+        ]
+      }
+    ],
+    "photos": [
+      {
+        "photoUrlResult": {
+          "avifUrl": "https://reservation.pc.gc.ca/images/45c6913b-f930-4db2-bc57-348c4cbd9b5b.avif",
+          "url": "https://reservation.pc.gc.ca/images/45c6913b-f930-4db2-bc57-348c4cbd9b5b.jpg"
+        },
+        "aspectType": 0
+      }
+    ],
+    "resourceCategoryId": -2147483648
+  },
+  "-2147475657": {
+    "resourceId": -2147475657,
+    "resourceLocationId": -2147483644,
+    "localizedValues": [
+      {
+        "cultureName": "fr-CA",
+        "name": "101",
+        "description": ""
+      },
+      {
+        "cultureName": "en-CA",
+        "name": "101",
+        "description": ""
+      }
+    ],
+    "minCapacity": null,
+    "maxCapacity": 6,
+    "maxAdultCapacity": null,
+    "definedAttributes": [
+      {
+        "attributeDefinitionId": -32768,
+        "attributeId": -2147320084,
+        "attributeVisibility": 0,
+        "value": null,
+        "values": [
+          30
+        ]
+      },
+      {
+        "attributeDefinitionId": -32756,
+        "attributeId": -2147211880,
+        "attributeVisibility": 0,
+        "value": null,
+        "values": [
+          1
+        ]
+      }
+    ],
+    "photos": [
+      {
+        "photoUrlResult": {
+          "avifUrl": "https://reservation.pc.gc.ca/images/4683a8a6-5030-40e1-8531-cb29bc0211c6.avif",
+          "url": "https://reservation.pc.gc.ca/images/4683a8a6-5030-40e1-8531-cb29bc0211c6.jpg"
+        },
+        "aspectType": 0
+      }
+    ],
+    "resourceCategoryId": -2147483648
+  },
+  "-2147475635": {
+    "resourceId": -2147475635,
+    "resourceLocationId": -2147483644,
+    "localizedValues": [
+      {
+        "cultureName": "fr-CA",
+        "name": "112",
+        "description": ""
+      },
+      {
+        "cultureName": "en-CA",
+        "name": "112",
+        "description": ""
+      }
+    ],
+    "minCapacity": null,
+    "maxCapacity": 6,
+    "maxAdultCapacity": null,
+    "definedAttributes": [
+      {
+        "attributeDefinitionId": -32768,
+        "attributeId": -2147319418,
+        "attributeVisibility": 0,
+        "value": null,
+        "values": [
+          30
+        ]
+      },
+      {
+        "attributeDefinitionId": -32756,
+        "attributeId": -2147211876,
+        "attributeVisibility": 0,
+        "value": null,
+        "values": [
+          1
+        ]
+      }
+    ],
+    "photos": [
+      {
+        "photoUrlResult": {
+          "avifUrl": "https://reservation.pc.gc.ca/images/3acb4a09-cb77-4036-a2a4-9f06f4295e6c.avif",
+          "url": "https://reservation.pc.gc.ca/images/3acb4a09-cb77-4036-a2a4-9f06f4295e6c.jpg"
+        },
+        "aspectType": 0
+      }
+    ],
+    "resourceCategoryId": -2147483648
+  },
+  "-2147475943": {
+    "resourceId": -2147475943,
+    "resourceLocationId": -2147483644,
+    "localizedValues": [
+      {
+        "cultureName": "fr-CA",
+        "name": "403",
+        "description": ""
+      },
+      {
+        "cultureName": "en-CA",
+        "name": "403",
+        "description": ""
+      }
+    ],
+    "minCapacity": null,
+    "maxCapacity": 6,
+    "maxAdultCapacity": null,
+    "definedAttributes": [
+      {
+        "attributeDefinitionId": -32768,
+        "attributeId": -2147325392,
+        "attributeVisibility": 0,
+        "value": null,
+        "values": [
+          30
+        ]
+      },
+      {
+        "attributeDefinitionId": -32756,
+        "attributeId": -2147211766,
+        "attributeVisibility": 0,
+        "value": null,
+        "values": [
+          1
+        ]
+      }
+    ],
+    "photos": [
+      {
+        "photoUrlResult": {
+          "avifUrl": "https://reservation.pc.gc.ca/images/92e1ed7e-37a4-4907-b6f2-f7af08a3618d.avif",
+          "url": "https://reservation.pc.gc.ca/images/92e1ed7e-37a4-4907-b6f2-f7af08a3618d.jpg"
+        },
+        "aspectType": 0
+      }
+    ],
+    "resourceCategoryId": -2147483648
+  }
 }

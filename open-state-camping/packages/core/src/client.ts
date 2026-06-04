@@ -9,7 +9,7 @@
 import type { ISODate } from "./types.js";
 import {
   ACCESSIBLE_ATTR,
-  CAMPSITE_CATEGORIES,
+  ALL_SITE_CATEGORIES,
   DEFAULT_USER_AGENT,
   MAX_MAP_REQUESTS,
   NON_GROUP_EQUIPMENT,
@@ -169,12 +169,27 @@ export class GoingToCampClient {
     const out: CampgroundRecord[] = [];
     for (const facility of data ?? []) {
       const categories: number[] = facility["resourceCategoryIds"] ?? [];
-      if (!categories.some((c) => CAMPSITE_CATEGORIES.has(c))) continue;
+      if (!categories.some((c) => ALL_SITE_CATEGORIES.has(c))) continue;
       out.push({
         resourceLocationId: facility["resourceLocationId"],
         name: (localized(facility["localizedValues"], "fullName") as string) ?? "",
         rootMapId: facility["rootMapId"],
       });
+    }
+    return out;
+  }
+
+  /** Resource categories: `resourceCategoryId` → display name (Campsite, oTENTik,
+   *  Cabin, Group, …). Lets search label each site by what it actually is. */
+  async listResourceCategories(): Promise<Map<number, string>> {
+    const data = (await this.get("/api/resourcecategory")) as
+      | Array<Record<string, any>>
+      | null;
+    const out = new Map<number, string>();
+    for (const c of data ?? []) {
+      const id = c["resourceCategoryId"];
+      const name = localized(c["localizedValues"], "name") as string | undefined;
+      if (typeof id === "number" && name) out.set(id, name);
     }
     return out;
   }
@@ -347,6 +362,7 @@ export class GoingToCampClient {
     startDate: ISODate;
     endDate: ISODate;
     equipmentId?: number | null;
+    bookingCategoryId?: number;
   }): Promise<DailyAvailability> {
     const result: DailyAvailability = {};
     const visited = new Set<string>();
@@ -368,6 +384,7 @@ export class GoingToCampClient {
           opts.startDate,
           opts.endDate,
           opts.equipmentId ?? null,
+          opts.bookingCategoryId ?? 0,
         ),
       )) as Record<string, any>;
 
@@ -435,11 +452,12 @@ function availabilityParams(
   startDate: ISODate,
   endDate: ISODate,
   equipmentId: number | null,
+  bookingCategoryId: number,
 ): Record<string, unknown> {
   const params: Record<string, unknown> = {
     mapId,
     resourceLocationId,
-    bookingCategoryId: 0,
+    bookingCategoryId,
     equipmentCategoryId: NON_GROUP_EQUIPMENT,
     startDate,
     endDate,

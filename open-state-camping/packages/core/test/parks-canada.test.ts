@@ -37,6 +37,9 @@ function fixtureFetch(): FetchLike {
       case "/api/equipment":
         data = fixture("equipment.json");
         break;
+      case "/api/resourcecategory":
+        data = fixture("resourcecategory_min.json");
+        break;
       case "/api/resourcelocation/resources":
         data = fixture("resources_min.json");
         break;
@@ -135,6 +138,31 @@ describe("ParksCanadaProvider — search", () => {
     const sites = await search({ accessibleOnly: true });
     expect(sites.length).toBeGreaterThan(0);
     expect(sites.every((s) => s.accessible)).toBe(true);
+  });
+
+  it("defaults to campsites and labels them by resource category", async () => {
+    const sites = await search();
+    expect(sites.length).toBeGreaterThan(0);
+    expect(sites.every((s) => s.siteType === "Campsite")).toBe(true);
+  });
+
+  it("filters by category — accommodation search excludes campsite resources", async () => {
+    // The fixtures are all Campsite-category, so an accommodation search finds none.
+    expect(await search({ category: "accommodation" })).toEqual([]);
+    expect(await search({ category: "group" })).toEqual([]);
+    expect((await search({ category: "campsite" })).length).toBeGreaterThan(0);
+  });
+});
+
+describe("resource category constants (corrected)", () => {
+  it("maps Group and Overflow to their real ids, not Yurt/oTENTik", async () => {
+    const { CATEGORY_GROUPS, RESOURCE_CATEGORY } = await import("../src/index.js");
+    expect(RESOURCE_CATEGORY.group).toBe(-2147483640);
+    expect(RESOURCE_CATEGORY.overflow).toBe(-2147483641);
+    expect(RESOURCE_CATEGORY.otentik).toBe(-2147483643); // was mislabeled GROUP_SITE
+    expect(RESOURCE_CATEGORY.yurt).toBe(-2147483647); // was mislabeled OVERFLOW_SITE
+    expect(CATEGORY_GROUPS.accommodation.has(RESOURCE_CATEGORY.otentik)).toBe(true);
+    expect(CATEGORY_GROUPS.campsite.has(RESOURCE_CATEGORY.group)).toBe(false);
   });
 });
 

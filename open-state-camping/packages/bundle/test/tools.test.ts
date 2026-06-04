@@ -33,6 +33,9 @@ function fixtureFetch(): FetchLike {
       case "/api/equipment":
         data = fixture("equipment.json");
         break;
+      case "/api/resourcecategory":
+        data = fixture("resourcecategory_min.json");
+        break;
       case "/api/resourcelocation/resources":
         data = fixture("resources_min.json");
         break;

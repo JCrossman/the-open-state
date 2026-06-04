@@ -14,11 +14,13 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
+  BOOKING_CATEGORY_ID,
   BOOKING_STAGES,
   buildBookingCart,
   newBookingIds,
   partySize,
   type BookingRequest,
+  type CategoryGroup,
   type ParksCanadaProvider,
   type PartyCounts,
   type ShopperEnvelope,
@@ -68,7 +70,14 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
           .describe(
             "The equipment for the site (e.g. 'small tent', 'van', or an id from " +
               "list_equipment_types). Use the same equipment you searched with. " +
-              "Defaults to a small tent.",
+              "Defaults to a small tent. Not needed for accommodations.",
+          ),
+        category: z
+          .enum(["campsite", "group", "accommodation"])
+          .optional()
+          .describe(
+            "Match what you searched: 'campsite' (default), 'group', or " +
+              "'accommodation' (oTENTik, cabin, yurt).",
           ),
         confirm: z
           .boolean()
@@ -118,6 +127,7 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
         return text(err instanceof Error ? err.message : String(err));
       }
 
+      const group: CategoryGroup = args.category ?? "campsite";
       const request: BookingRequest = {
         resourceId: Number(args.site_id),
         resourceLocationId: Number(args.campground_id),
@@ -125,6 +135,7 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
         endDate: args.end_date,
         party,
         subEquipmentCategoryId,
+        bookingCategoryId: BOOKING_CATEGORY_ID[group],
       };
 
       const summary = bookingSummary(request, party, envelope, args.equipment_type);

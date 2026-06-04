@@ -149,6 +149,35 @@ sanitized capture in `test/fixtures/booking/` — the cart is rebuilt from input
 asserted against what the platform accepted, with no network call. **Lesson that
 kept recurring: use the real object the server returns; don't reconstruct it.**
 
+## Resource categories & the four booking groups (verified)
+
+`GET /api/resourcecategory` names every resource category and gives its
+`resourceType`, which is the booking-model divider:
+- **type 0** — a specific site reserved for nights. Campsite (`-2147483648`),
+  Overflow (`-2147483641`), Group (`-2147483640`), Seasonal (`-2147483624`), and
+  the accommodations: Yurt (`-2147483647`), oTENTik (`-2147483643`), Ôasis
+  (`-2147483644`), Rustic Cabin (`-2147483645`), Cabin (`-2147483646`), MicrOcube
+  (`-2147483642`), Prospector Tent (`-2147483630`), Teepee (`-2147483631`),
+  Equipped Camping (`-2147483635`).
+- **type 2** — Day Use time slots (Shuttle, Parking, Ferry, Guided Hike/Event,
+  Fishing, Learn-to, Day Use Bus, Day Runner Hike).
+- **type 3** — Backcountry (Backcountry Zone/Site/Shelter/Yurt/Cabin, Hiking/
+  Backpacking Trip, Access Point).
+
+`GET /api/searchcriteriatabs` maps the four UI tabs to `bookingCategoryId`s, and
+`GET /api/bookingcategories` names them: Campsite 0, Accommodation 1, Group 2, …
+**Categorisation is per-resource** (`resource.resourceCategoryId`), *not* a search
+filter — `/api/availability/map` returns the same resources for any
+`bookingCategoryId`, **but availability only populates for accommodations/group
+when the matching `bookingCategoryId` is passed**, so the search must both pass
+`bookingCategoryId` *and* filter resources by `resourceCategoryId`.
+
+> ⚠️ Earlier constants mislabeled `-2147483647` as "Overflow" (it's **Yurt**) and
+> `-2147483643` as "Group" (it's **oTENTik**); the real Group is `-2147483640` and
+> Overflow `-2147483641`. Corrected in `constants.ts` (`RESOURCE_CATEGORY`,
+> `CATEGORY_GROUPS`). Model 0 (Campsite / Group / Accommodation) share the
+> search+booking machinery; Day Use (model 1) and Backcountry (model 5) do not.
+
 ## Divergences from camply (camply 0.34.2 is stale for this host)
 
 1. **`/api/resource/details` is GONE → HTTP 404.** This was camply's *only* source

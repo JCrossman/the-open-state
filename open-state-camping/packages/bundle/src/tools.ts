@@ -14,6 +14,15 @@ const isoDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date like 2026-07-17 (YYYY-MM-DD).");
 
+/** Which kind of frontcountry stay to search. */
+const categoryParam = z
+  .enum(["campsite", "group", "accommodation"])
+  .optional()
+  .describe(
+    "What to search: 'campsite' (regular sites, default), 'group' (group " +
+      "campsites), or 'accommodation' (roofed/equipped — oTENTik, cabin, yurt).",
+  );
+
 type TextResult = { content: { type: "text"; text: string }[] };
 const text = (s: string): TextResult => ({ content: [{ type: "text", text: s }] });
 
@@ -157,6 +166,7 @@ export function registerTools(
         accessible_only: z.boolean().optional(),
         nights: z.number().int().positive().optional(),
         weekends_only: z.boolean().optional(),
+        category: categoryParam,
       },
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
@@ -176,6 +186,7 @@ export function registerTools(
           accessibleOnly: args.accessible_only ?? false,
           nights: args.nights ?? null,
           weekendsOnly: args.weekends_only ?? false,
+          category: args.category,
         });
         return text(
           fmt.formatSearchSites(sites, {
@@ -210,6 +221,7 @@ export function registerTools(
         accessible_only: z.boolean().optional(),
         nights: z.number().int().positive().optional(),
         weekends_only: z.boolean().optional(),
+        category: categoryParam,
       },
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
@@ -228,6 +240,7 @@ export function registerTools(
           accessibleOnly: args.accessible_only ?? false,
           nights: args.nights ?? null,
           weekendsOnly: args.weekends_only ?? false,
+          category: args.category,
         });
         return text(
           fmt.formatParkAvailability(args.query, results, {

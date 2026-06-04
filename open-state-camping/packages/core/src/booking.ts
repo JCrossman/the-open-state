@@ -53,6 +53,8 @@ export interface BookingRequest {
   rateCategoryId?: number;
   checkInTime?: string;
   checkOutTime?: string;
+  /** Booking category for the commit: 0 campsite (default), 1 accommodation, 2 group. */
+  bookingCategoryId?: number;
 }
 
 /**
@@ -273,7 +275,7 @@ export function buildBooking(
   return {
     bookingUid: refs.bookingUid,
     cartUid: refs.cartUid,
-    bookingCategoryId: 0,
+    bookingCategoryId: request.bookingCategoryId ?? 0,
     bookingModel: 0,
     newVersion,
     createTransactionUid: refs.cartTransactionUid,
