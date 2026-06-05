@@ -178,6 +178,12 @@ when the matching `bookingCategoryId` is passed**, so the search must both pass
 > `CATEGORY_GROUPS`). Model 0 (Campsite / Group / Accommodation) share the
 > search+booking machinery; Day Use (model 1) and Backcountry (model 5) do not.
 
+**Model 0 is complete and live-verified** — search *and* booking confirmed
+end-to-end for all three categories (Campsite, Group, Accommodation). Accommodation
+booking was driven to the payment screen against a real signed-in session (a cabin
+held, no payment) on 2026-06-05; the only difference from a campsite booking is the
+`bookingCategoryId` (0/2/1) and that accommodations send no equipment.
+
 ## Divergences from camply (camply 0.34.2 is stale for this host)
 
 1. **`/api/resource/details` is GONE → HTTP 404.** This was camply's *only* source
