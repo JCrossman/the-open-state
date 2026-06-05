@@ -15,6 +15,7 @@ import {
   weekdayName,
   type AvailableSite,
   type CampgroundAvailability,
+  type DayUseProduct,
   type DayUseSlot,
   type EquipmentType,
   type RecreationArea,
@@ -192,6 +193,27 @@ export function dayUseDatesProblem(start: string, end: string): string | null {
     return `The end date (${withWeekday(end)}) can't be before the start date (${withWeekday(start)}).`;
   }
   return null;
+}
+
+export function formatDayUseProducts(products: DayUseProduct[], query?: string): string {
+  if (products.length === 0) {
+    return query
+      ? `No Day Use product matched "${query}". Ask me to list all Day Use options.`
+      : "No Day Use products were found.";
+  }
+  const lines = [
+    query
+      ? `Day Use options matching "${query}":`
+      : "Parks Canada Day Use options you can book:",
+    "",
+  ];
+  for (const p of products) lines.push(`- ${p.product}`);
+  lines.push(
+    "",
+    "Tell me which one, plus the date and party size, and I'll check the open times " +
+      "(e.g. \"Moraine Lake shuttle times for July 15, party of 2\").",
+  );
+  return lines.join("\n");
 }
 
 export function formatDayUse(

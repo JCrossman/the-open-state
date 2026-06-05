@@ -35,6 +35,7 @@ import { localized } from "./util.js";
 import type {
   AvailableSite,
   CampgroundAvailability,
+  DayUseProduct,
   DayUseSlot,
   EquipmentType,
   ISODate,
@@ -150,12 +151,7 @@ export class ParksCanadaProvider {
     partySize?: number;
   }): Promise<DayUseSlot[]> {
     const need = Math.max(1, opts.partySize ?? 1);
-    const products = (await this.bookingCategories()).filter((p) => p.bookingModel === 1);
-    const words = opts.query.toLowerCase().split(/\s+/).filter((w) => w.length >= 4);
-    const matched = products.filter((p) => {
-      const name = p.name.toLowerCase();
-      return words.length === 0 || words.some((w) => name.includes(w));
-    });
+    const matched = await this.dayUseProducts(opts.query);
 
     const slots: DayUseSlot[] = [];
     for (const product of matched) {
@@ -198,6 +194,31 @@ export class ParksCanadaProvider {
         compareSiteNames(x.slotName, y.slotName),
     );
     return slots;
+  }
+
+  /** Day Use products (bookingModel 1), optionally narrowed to a name/place query. */
+  private async dayUseProducts(query?: string): Promise<BookingCategoryRecord[]> {
+    const products = (await this.bookingCategories()).filter((p) => p.bookingModel === 1);
+    const words = (query ?? "").toLowerCase().split(/\s+/).filter((w) => w.length >= 4);
+    if (words.length === 0) return products;
+    return products.filter((p) => {
+      const name = p.name.toLowerCase();
+      return words.some((w) => name.includes(w));
+    });
+  }
+
+  /** Browse the Day Use catalog — the products a citizen can pick (shuttles, parking,
+   *  guided events, …), optionally filtered by name/place. No dates needed. */
+  async listDayUseProducts(query?: string): Promise<DayUseProduct[]> {
+    return (await this.dayUseProducts(query))
+      .map((p) => ({
+        provider: PROVIDER_NAME,
+        recreationAreaId: PARKS_CANADA_REC_AREA_ID,
+        productId: String(p.bookingCategoryId),
+        product: p.name,
+        campgroundId: String(p.resourceLocationId),
+      }))
+      .sort((a, b) => a.product.localeCompare(b.product));
   }
 
   private async bookingCategories(): Promise<BookingCategoryRecord[]> {

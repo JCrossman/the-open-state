@@ -165,6 +165,13 @@ describe("bundle MCP server", () => {
     expect(out).toContain("campground id:");
   });
 
+  it("search_day_use with no dates browses the Day Use product catalog", async () => {
+    const out = await callText(await connectClient(), "search_day_use", {});
+    expect(out).toContain("Day Use options you can book");
+    expect(out).toContain("Shuttle to Lake Louise and Moraine Lake");
+    expect(out).toContain("Parking");
+  });
+
   it("search_day_use lists open timed slots with spots remaining", async () => {
     const out = await callText(await connectClient(), "search_day_use", {
       query: "Moraine Lake shuttle",

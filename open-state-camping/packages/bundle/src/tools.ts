@@ -268,21 +268,26 @@ export function registerTools(
     {
       title: "Search Day Use passes (shuttles, parking, guided events)",
       description:
-        "Find open Day Use times — shuttles (Moraine Lake, Lake O'Hara), parking " +
-        "passes, ferries, guided events. These are timed slots booked by the day, " +
-        "not overnight sites. Give a product or place in `query` (e.g. 'Moraine " +
-        "Lake shuttle', 'Lake O'Hara bus', 'parking'), the date(s), and party size. " +
-        "Returns the open time slots with spots remaining.",
+        "Day Use = timed passes booked by the day (not overnight sites): shuttles " +
+        "(Moraine Lake, Lake O'Hara), parking, ferries, guided events, fishing. " +
+        "Call with NO query (or just a place) to LIST the available Day Use products. " +
+        "Call with a product/place in `query` (e.g. 'Moraine Lake shuttle', 'parking') " +
+        "PLUS date(s) and party size to get the open time slots with spots remaining.",
       inputSchema: {
-        query: z.string(),
-        start_date: isoDate,
-        end_date: isoDate,
+        query: z.string().optional(),
+        start_date: isoDate.optional(),
+        end_date: isoDate.optional(),
         party_size: z.number().int().positive().optional(),
       },
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async (args) => {
       try {
+        // Browse mode: no dates (or no query) → list the products, mirroring the tab.
+        if (!args.query || !args.start_date || !args.end_date) {
+          const products = await provider.listDayUseProducts(args.query);
+          return text(fmt.formatDayUseProducts(products, args.query));
+        }
         const dateIssue = fmt.dayUseDatesProblem(args.start_date, args.end_date);
         if (dateIssue) return text(dateIssue);
         const slots = await provider.searchDayUse({
@@ -291,6 +296,10 @@ export function registerTools(
           endDate: args.end_date,
           partySize: args.party_size,
         });
+        // No product matched the query → show the catalog so the citizen can pick.
+        if (slots.length === 0 && (await provider.listDayUseProducts(args.query)).length === 0) {
+          return text(fmt.formatDayUseProducts(await provider.listDayUseProducts(), args.query));
+        }
         return text(
           fmt.formatDayUse(args.query, slots, {
             stay: stay(args.start_date, args.end_date),

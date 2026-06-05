@@ -17,6 +17,15 @@ export interface Campground {
   offers?: string[];
 }
 
+/** A Day Use product the citizen can choose (one row of the Day Use tab). */
+export interface DayUseProduct {
+  provider: string;
+  recreationAreaId: string;
+  productId: string;
+  product: string;
+  campgroundId: string;
+}
+
 /** A bookable Day Use time-slot on a given day (shuttle departure, parking pass, …). */
 export interface DayUseSlot {
   provider: string;

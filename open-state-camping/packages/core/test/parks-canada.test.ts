@@ -222,6 +222,20 @@ describe("ParksCanadaProvider — Day Use (model 1)", () => {
       }),
     ).toEqual([]);
   });
+
+  it("browses the Day Use catalog (model 1 only), and narrows by query", async () => {
+    const all = await makeProvider().listDayUseProducts();
+    // Fixture has 3 model-1 products + 1 model-0 campsite; only the 3 are Day Use.
+    expect(all.map((p) => p.product)).toEqual([
+      "Lake O'Hara Day Use Bus",
+      "Parking",
+      "Shuttle to Lake Louise and Moraine Lake",
+    ]);
+    const moraine = await makeProvider().listDayUseProducts("moraine");
+    expect(moraine).toHaveLength(1);
+    expect(moraine[0]!.productId).toBe("9");
+    expect(moraine[0]!.campgroundId).toBe("-2147483642");
+  });
 });
 
 describe("resource category constants (corrected)", () => {
