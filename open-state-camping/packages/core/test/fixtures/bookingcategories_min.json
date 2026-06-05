@@ -1,0 +1,46 @@
+[
+  {
+    "bookingCategoryId": 9,
+    "bookingModel": 1,
+    "resourceLocationId": -2147483642,
+    "localizedValues": [
+      {
+        "cultureName": "en-CA",
+        "name": "Shuttle to Lake Louise and Moraine Lake"
+      }
+    ]
+  },
+  {
+    "bookingCategoryId": 10,
+    "bookingModel": 1,
+    "resourceLocationId": -2147483536,
+    "localizedValues": [
+      {
+        "cultureName": "en-CA",
+        "name": "Lake O'Hara Day Use Bus"
+      }
+    ]
+  },
+  {
+    "bookingCategoryId": 8,
+    "bookingModel": 1,
+    "resourceLocationId": -2147483600,
+    "localizedValues": [
+      {
+        "cultureName": "en-CA",
+        "name": "Parking"
+      }
+    ]
+  },
+  {
+    "bookingCategoryId": 0,
+    "bookingModel": 0,
+    "resourceLocationId": -2147483644,
+    "localizedValues": [
+      {
+        "cultureName": "en-CA",
+        "name": "Campsite"
+      }
+    ]
+  }
+]

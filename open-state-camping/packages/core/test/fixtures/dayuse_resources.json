@@ -1,0 +1,70 @@
+{
+  "-2147476638": {
+    "resourceId": -2147476638,
+    "resourceCategoryId": -2147483627,
+    "maxCapacity": 10,
+    "localizedValues": [
+      {
+        "cultureName": "en-CA",
+        "name": "Moraine Lake: 6:30am-7am",
+        "description": "Tickets are for a one-hour window; you may show up anytime during that hour. Once at the lakes you may stay as long as you choose and connect between Lake Louise and Moraine Lake on a first come first serve basis, via the Lake Connector shuttle. Your ticket includes return shuttle service from either lake back to the Park and Ride."
+      },
+      {
+        "cultureName": "fr-CA",
+        "name": "Lac Moraine : 6h30 à 7h",
+        "description": "Les billets sont valides pour une plage d’une heure, et vous pouvez vous présenter en tout temps pendant votre plage horaire. Vous pouvez séjourner aux lacs aussi longtemps que vous le souhaitez et prendre la navette-liaison à destination des lacs pour faire le trajet entre le lac Louise et le lac Moraine. Les places sont attribuées selon l’ordre d’arrivée des passagers. Votre billet vous permet de retourner gratuitement au parcobus à partir de l’un ou l’autre des lacs une fois votre visite terminée."
+      }
+    ]
+  },
+  "-2147476652": {
+    "resourceId": -2147476652,
+    "resourceCategoryId": -2147483627,
+    "maxCapacity": 10,
+    "localizedValues": [
+      {
+        "cultureName": "en-CA",
+        "name": "Moraine Lake: 7am-8am",
+        "description": "Tickets are for a one-hour window; you may show up anytime during that hour. Once at the lakes you may stay as long as you choose and connect between Lake Louise and Moraine Lake on a first come first serve basis, via the Lake Connector shuttle. Your ticket includes return shuttle service from either lake back to the Park and Ride."
+      },
+      {
+        "cultureName": "fr-CA",
+        "name": "Lac Moraine : 7h à 8h",
+        "description": "Les billets sont valides pour une plage d’une heure, et vous pouvez vous présenter en tout temps pendant votre plage horaire. Vous pouvez séjourner aux lacs aussi longtemps que vous le souhaitez et prendre la navette-liaison à destination des lacs pour faire le trajet entre le lac Louise et le lac Moraine. Les places sont attribuées selon l’ordre d’arrivée des passagers. Votre billet vous permet de retourner gratuitement au parcobus à partir de l’un ou l’autre des lacs une fois votre visite terminée."
+      }
+    ]
+  },
+  "-2147471886": {
+    "resourceId": -2147471886,
+    "resourceCategoryId": -2147483627,
+    "maxCapacity": 10,
+    "localizedValues": [
+      {
+        "cultureName": "en-CA",
+        "name": "Lake Louise: 7am-8am",
+        "description": "Tickets are for a one-hour window; you may show up anytime during that hour. Once at the lakes you may stay as long as you choose and connect between Lake Louise and Moraine Lake on a first come first serve basis, via the Lake Connector shuttle. Your ticket includes return shuttle service from either lake back to the Park and Ride."
+      },
+      {
+        "cultureName": "fr-CA",
+        "name": "Lac Louise : 7h à 8h",
+        "description": "Les billets sont valides pour une plage d’une heure, et vous pouvez vous présenter en tout temps pendant votre plage horaire. Vous pouvez séjourner aux lacs aussi longtemps que vous le souhaitez et prendre la navette-liaison à destination des lacs pour faire le trajet entre le lac Louise et le lac Moraine. Les places sont attribuées selon l’ordre d’arrivée des passagers. Votre billet vous permet de retourner gratuitement au parcobus à partir de l’un ou l’autre des lacs une fois votre visite terminée."
+      }
+    ]
+  },
+  "-2147476646": {
+    "resourceId": -2147476646,
+    "resourceCategoryId": -2147483627,
+    "maxCapacity": 10,
+    "localizedValues": [
+      {
+        "cultureName": "en-CA",
+        "name": "Lake Louise: 8am-9am",
+        "description": "Tickets are for a one-hour window; you may show up anytime during that hour. Once at the lakes you may stay as long as you choose and connect between Lake Louise and Moraine Lake on a first come first serve basis, via the Lake Connector shuttle. Your ticket includes return shuttle service from either lake back to the Park and Ride."
+      },
+      {
+        "cultureName": "fr-CA",
+        "name": "Lac Louise : 8h à 9h",
+        "description": "Les billets sont valides pour une plage d’une heure, et vous pouvez vous présenter en tout temps pendant votre plage horaire. Vous pouvez séjourner aux lacs aussi longtemps que vous le souhaitez et prendre la navette-liaison à destination des lacs pour faire le trajet entre le lac Louise et le lac Moraine. Les places sont attribuées selon l’ordre d’arrivée des passagers. Votre billet vous permet de retourner gratuitement au parcobus à partir de l’un ou l’autre des lacs une fois votre visite terminée."
+      }
+    ]
+  }
+}

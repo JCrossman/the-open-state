@@ -264,6 +264,46 @@ export function registerTools(
   );
 
   server.registerTool(
+    "search_day_use",
+    {
+      title: "Search Day Use passes (shuttles, parking, guided events)",
+      description:
+        "Find open Day Use times — shuttles (Moraine Lake, Lake O'Hara), parking " +
+        "passes, ferries, guided events. These are timed slots booked by the day, " +
+        "not overnight sites. Give a product or place in `query` (e.g. 'Moraine " +
+        "Lake shuttle', 'Lake O'Hara bus', 'parking'), the date(s), and party size. " +
+        "Returns the open time slots with spots remaining.",
+      inputSchema: {
+        query: z.string(),
+        start_date: isoDate,
+        end_date: isoDate,
+        party_size: z.number().int().positive().optional(),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async (args) => {
+      try {
+        const dateIssue = fmt.dayUseDatesProblem(args.start_date, args.end_date);
+        if (dateIssue) return text(dateIssue);
+        const slots = await provider.searchDayUse({
+          query: args.query,
+          startDate: args.start_date,
+          endDate: args.end_date,
+          partySize: args.party_size,
+        });
+        return text(
+          fmt.formatDayUse(args.query, slots, {
+            stay: stay(args.start_date, args.end_date),
+            partySize: args.party_size ?? 1,
+          }),
+        );
+      } catch (e) {
+        return text(fmt.problem(e));
+      }
+    },
+  );
+
+  server.registerTool(
     "get_site_details",
     {
       title: "Get campsite details",

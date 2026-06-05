@@ -18,6 +18,7 @@ import {
 import {
   GoingToCampClient,
   resourceIsAccessible,
+  type BookingCategoryRecord,
   type CampgroundRecord,
   type EquipmentRecord,
   type FetchLike,
@@ -34,6 +35,7 @@ import { localized } from "./util.js";
 import type {
   AvailableSite,
   CampgroundAvailability,
+  DayUseSlot,
   EquipmentType,
   ISODate,
   RecreationArea,
@@ -77,6 +79,7 @@ export class ParksCanadaProvider {
   private attrDefsCache?: Record<string, any>;
   private equipmentCache?: EquipmentRecord[];
   private resourceCategoriesCache?: Map<number, ResourceCategoryInfo>;
+  private bookingCategoriesCache?: BookingCategoryRecord[];
 
   constructor(
     opts: {
@@ -133,6 +136,75 @@ export class ParksCanadaProvider {
       equipmentId: String(e.equipmentId),
       name: e.name ?? "",
     }));
+  }
+
+  /**
+   * Search Day Use (model 1) products — shuttles, parking, guided events — for open
+   * timed slots. Matches the query against product names, then returns each slot
+   * (e.g. "Moraine Lake: 6:30am-7am") with the spots left on each requested day.
+   */
+  async searchDayUse(opts: {
+    query: string;
+    startDate: ISODate;
+    endDate: ISODate;
+    partySize?: number;
+  }): Promise<DayUseSlot[]> {
+    const need = Math.max(1, opts.partySize ?? 1);
+    const products = (await this.bookingCategories()).filter((p) => p.bookingModel === 1);
+    const words = opts.query.toLowerCase().split(/\s+/).filter((w) => w.length >= 4);
+    const matched = products.filter((p) => {
+      const name = p.name.toLowerCase();
+      return words.length === 0 || words.some((w) => name.includes(w));
+    });
+
+    const slots: DayUseSlot[] = [];
+    for (const product of matched) {
+      const resources = await this.client.getResources(String(product.resourceLocationId));
+      // Public, bookable slots only — exclude staff/media/"Park Use" internal holds.
+      const entries = Object.values(resources).filter((r: any) => {
+        const name = resourceName(r) ?? "";
+        return !/\(park use\)/i.test(name);
+      });
+      const byId = new Map(entries.map((r: any) => [String(r["resourceId"]), r]));
+      if (byId.size === 0) continue;
+      const avail = await this.client.dayUseAvailability({
+        resourceLocationId: product.resourceLocationId,
+        resourceIds: [...byId.keys()],
+        startDate: opts.startDate,
+        endDate: opts.endDate,
+        bookingCategoryId: product.bookingCategoryId,
+      });
+      for (const a of avail) {
+        if (a.remainingQuota < need) continue;
+        const resource = byId.get(a.resourceId);
+        if (!resource) continue;
+        slots.push({
+          provider: PROVIDER_NAME,
+          recreationAreaId: PARKS_CANADA_REC_AREA_ID,
+          productId: String(product.bookingCategoryId),
+          product: product.name,
+          campgroundId: String(product.resourceLocationId),
+          slotId: a.resourceId,
+          slotName: resourceName(resource) ?? a.resourceId,
+          date: a.date,
+          remaining: a.remainingQuota,
+        });
+      }
+    }
+    slots.sort(
+      (x, y) =>
+        x.product.localeCompare(y.product) ||
+        x.date.localeCompare(y.date) ||
+        compareSiteNames(x.slotName, y.slotName),
+    );
+    return slots;
+  }
+
+  private async bookingCategories(): Promise<BookingCategoryRecord[]> {
+    if (!this.bookingCategoriesCache) {
+      this.bookingCategoriesCache = await this.client.listBookingCategories();
+    }
+    return this.bookingCategoriesCache;
   }
 
   async searchSites(opts: SearchSitesOptions): Promise<AvailableSite[]> {

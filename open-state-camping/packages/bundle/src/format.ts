@@ -15,6 +15,7 @@ import {
   weekdayName,
   type AvailableSite,
   type CampgroundAvailability,
+  type DayUseSlot,
   type EquipmentType,
   type RecreationArea,
   type SiteDetails,
@@ -172,6 +173,68 @@ export function formatSearchParks(query: string, areas: RecreationArea[]): strin
     "",
     `Next, search for open sites using recreation area id ${area.recreationAreaId} ` +
       "and one of the campground ids above, along with your dates and party size.",
+  );
+  return lines.join("\n");
+}
+
+/** Date check for Day Use: a single day is fine (start may equal end), but no past. */
+export function dayUseDatesProblem(start: string, end: string): string | null {
+  const today = todayUTC();
+  if (start < today) {
+    const suggested = nextOccurrence(start);
+    return (
+      `That date, ${withWeekday(start)}, is in the past — today is ` +
+      `${withWeekday(today)}. You most likely mean ${withWeekday(suggested)}; ` +
+      `search again with that date.`
+    );
+  }
+  if (end < start) {
+    return `The end date (${withWeekday(end)}) can't be before the start date (${withWeekday(start)}).`;
+  }
+  return null;
+}
+
+export function formatDayUse(
+  query: string,
+  slots: DayUseSlot[],
+  opts: { stay: string; partySize: number },
+): string {
+  if (slots.length === 0) {
+    return (
+      `No open Day Use times were found for "${query}" on ${opts.stay}, party of ` +
+      `${opts.partySize}. Day Use passes (shuttles, parking, guided events) often ` +
+      "release on a fixed schedule and sell out fast — try other dates, or check " +
+      "whether bookings for that date have opened yet."
+    );
+  }
+  // Group by product, then by day, so the citizen reads "this shuttle, this day, these times".
+  const byProduct = new Map<string, DayUseSlot[]>();
+  for (const s of slots) {
+    (byProduct.get(s.product) ?? byProduct.set(s.product, []).get(s.product)!).push(s);
+  }
+  const lines = [
+    `Found open Day Use times for "${query}" on ${opts.stay}, party of ${opts.partySize}. ` +
+      INDEPENDENCE_NOTE,
+  ];
+  for (const [product, ps] of byProduct) {
+    lines.push("", product + ":");
+    const byDay = new Map<string, DayUseSlot[]>();
+    for (const s of ps) {
+      (byDay.get(s.date) ?? byDay.set(s.date, []).get(s.date)!).push(s);
+    }
+    for (const [date, ds] of [...byDay].sort((a, b) => a[0].localeCompare(b[0]))) {
+      lines.push(`  ${date}:`);
+      for (const s of ds) {
+        lines.push(
+          `    - ${s.slotName} — ${s.remaining} spot(s) left  [internal id ${s.slotId}]`,
+        );
+      }
+    }
+  }
+  lines.push(
+    "",
+    "Tell me which time you'd like and I'll prepare it — I take it to the payment " +
+      "screen and you review and pay yourself. Don't show the citizen the internal ids.",
   );
   return lines.join("\n");
 }

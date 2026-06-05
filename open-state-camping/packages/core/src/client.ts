@@ -42,6 +42,21 @@ export interface EquipmentRecord {
 /** Per-day availability code list, keyed by `resourceId`. */
 export type DailyAvailability = Record<string, (number | null)[]>;
 
+/** A bookable product/tab (e.g. a specific shuttle, parking lot, campsite group). */
+export interface BookingCategoryRecord {
+  bookingCategoryId: number;
+  bookingModel: number;
+  resourceLocationId: number | string;
+  name: string;
+}
+
+/** Day-use availability: per timed-slot resource, per day, the remaining quota. */
+export interface DayUseSlotAvailability {
+  resourceId: string;
+  date: ISODate;
+  remainingQuota: number;
+}
+
 export class GoingToCampClient {
   private readonly base: string;
   private readonly headers: Record<string, string>;
@@ -201,6 +216,64 @@ export class GoingToCampClient {
       if (typeof id === "number" && name) {
         out.set(id, { name, resourceType: c["resourceType"] });
       }
+    }
+    return out;
+  }
+
+  /** All bookable products/tabs (campsites, shuttles, parking, …) with their
+   *  model + facility — the Day Use catalog lives here (bookingModel 1). */
+  async listBookingCategories(): Promise<BookingCategoryRecord[]> {
+    const data = (await this.get("/api/bookingcategories")) as
+      | Array<Record<string, any>>
+      | null;
+    const out: BookingCategoryRecord[] = [];
+    for (const c of data ?? []) {
+      const id = c["bookingCategoryId"];
+      if (typeof id !== "number") continue;
+      out.push({
+        bookingCategoryId: id,
+        bookingModel: c["bookingModel"],
+        resourceLocationId: c["resourceLocationId"],
+        name: (localized(c["localizedValues"], "name") as string) ?? "",
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Day-use (time-slot) availability. POST the slot `resourceId`s as the body, with
+   * the facility + dates + product `bookingCategoryId` as query params; the platform
+   * returns the remaining reservable quota per slot per day. (Verified against a
+   * captured Moraine Lake / Lake Louise shuttle session.)
+   */
+  async dayUseAvailability(opts: {
+    resourceLocationId: number | string;
+    resourceIds: Array<number | string>;
+    startDate: ISODate;
+    endDate: ISODate;
+    bookingCategoryId: number;
+  }): Promise<DayUseSlotAvailability[]> {
+    const params = new URLSearchParams({
+      resourceLocationId: String(opts.resourceLocationId),
+      startDate: opts.startDate,
+      endDate: opts.endDate,
+      bookingCategoryId: String(opts.bookingCategoryId),
+    });
+    const body = opts.resourceIds.map((id) => Number(id));
+    const data = (await this.post(
+      `/api/availability/dailyactivity?${params.toString()}`,
+      body,
+    )) as Array<Record<string, any>> | null;
+    const out: DayUseSlotAvailability[] = [];
+    for (const row of data ?? []) {
+      const ar = (row["availabilityResult"] ?? {}) as Record<string, any>;
+      const start = (row["range"]?.["start"] ?? ar["startDate"]) as string | undefined;
+      if (start == null) continue;
+      out.push({
+        resourceId: String(row["resourceId"] ?? ar["resourceId"]),
+        date: start.slice(0, 10),
+        remainingQuota: Number(ar["remainingReservableQuota"] ?? 0),
+      });
     }
     return out;
   }

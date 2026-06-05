@@ -37,7 +37,16 @@ function fixtureFetch(): FetchLike {
         data = fixture("resourcecategory_min.json");
         break;
       case "/api/resourcelocation/resources":
-        data = fixture("resources_min.json");
+        data =
+          u.searchParams.get("resourceLocationId") === "-2147483642"
+            ? fixture("dayuse_resources.json")
+            : fixture("resources_min.json");
+        break;
+      case "/api/bookingcategories":
+        data = fixture("bookingcategories_min.json");
+        break;
+      case "/api/availability/dailyactivity":
+        data = fixture("dayuse_dailyactivity.json");
         break;
       case "/api/attribute/filterable":
         data = fixture("attribute_filterable_min.json");
@@ -115,6 +124,7 @@ describe("bundle MCP server", () => {
         "list_equipment_types",
         "prepare_booking_url",
         "resolve_dates",
+        "search_day_use",
         "search_park_availability",
         "search_parks",
         "search_sites",
@@ -153,6 +163,18 @@ describe("bundle MCP server", () => {
     });
     expect(out).toContain("Availability for");
     expect(out).toContain("campground id:");
+  });
+
+  it("search_day_use lists open timed slots with spots remaining", async () => {
+    const out = await callText(await connectClient(), "search_day_use", {
+      query: "Moraine Lake shuttle",
+      start_date: "2026-07-15",
+      end_date: "2026-07-16",
+      party_size: 2,
+    });
+    expect(out).toContain("Moraine Lake");
+    expect(out).toMatch(/spot\(s\) left/);
+    expect(out).not.toContain("internal id ".concat("undefined"));
   });
 
   it("an ambiguous equipment word is flagged, not masked", async () => {

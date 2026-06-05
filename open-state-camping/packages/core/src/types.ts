@@ -17,6 +17,23 @@ export interface Campground {
   offers?: string[];
 }
 
+/** A bookable Day Use time-slot on a given day (shuttle departure, parking pass, …). */
+export interface DayUseSlot {
+  provider: string;
+  recreationAreaId: string;
+  /** The day-use product (its bookingCategoryId, as a string). */
+  productId: string;
+  product: string;
+  /** The facility (resourceLocationId), reused by the booking flow. */
+  campgroundId: string;
+  /** The timed-slot resource (resourceId). */
+  slotId: string;
+  slotName: string;
+  date: ISODate;
+  /** Remaining reservable spots; a party needs at least its size here. */
+  remaining: number;
+}
+
 export interface RecreationArea {
   provider: string;
   recreationAreaId: string;

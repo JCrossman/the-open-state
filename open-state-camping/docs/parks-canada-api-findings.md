@@ -224,9 +224,22 @@ params `resourceLocationId, startDate, endDate, bookingCategoryId` and a JSON bo
 
 `bookingCategoryId` is **per product** (Lake O'Hara Bus 10, Lake Louise/Moraine
 Shuttle 9, Parking 8, …), and each maps to one day-use facility (e.g. "Yoho - Lake
-O'Hara Bus" rlid `-2147483536`, category Day Use Bus `-2147483626`). The populated
-slot shape, the `activity` POST body, and the booking cart are best captured from a
-single HAR of a real day-use booking (browse → payment).
+O'Hara Bus" rlid `-2147483536`, category Day Use Bus `-2147483626`).
+
+**Verified from a captured shuttle session (HAR):** the catalog comes from
+`/api/bookingcategories` (each entry carries `bookingCategoryId, bookingModel,
+resourceLocationId, name`). A facility's **timed slots are its resources** —
+`GET /api/resourcelocation/resources` returns e.g. "Moraine Lake: 6:30am-7am",
+"Lake Louise: 8am-9am", "…(Last Minute)", "…(Park Use)" (each `maxCapacity` 10).
+The day grid is `POST /api/availability/dailyactivity` with **body = array of slot
+`resourceId`s** and query `resourceLocationId,startDate,endDate,bookingCategoryId`;
+the response is per-slot per-day `availabilityResult.remainingReservableQuota`.
+
+**Day Use SEARCH is built** (`searchDayUse` + `search_day_use` tool), tested
+against the captured response. **Booking is not yet built** — the captured HAR was
+browse-only (no `/api/cart` calls), so the day-use cart shape still needs a HAR that
+includes add-to-cart → payment. ("(Park Use)" slots are filtered out as
+staff/internal.)
 
 ## Divergences from camply (camply 0.34.2 is stale for this host)
 

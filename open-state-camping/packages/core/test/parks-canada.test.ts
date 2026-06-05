@@ -41,7 +41,16 @@ function fixtureFetch(): FetchLike {
         data = fixture("resourcecategory_min.json");
         break;
       case "/api/resourcelocation/resources":
-        data = fixture("resources_min.json");
+        data =
+          u.searchParams.get("resourceLocationId") === "-2147483642"
+            ? fixture("dayuse_resources.json")
+            : fixture("resources_min.json");
+        break;
+      case "/api/bookingcategories":
+        data = fixture("bookingcategories_min.json");
+        break;
+      case "/api/availability/dailyactivity":
+        data = fixture("dayuse_dailyactivity.json");
         break;
       case "/api/attribute/filterable":
         data = fixture("attribute_filterable_min.json");
@@ -174,6 +183,44 @@ describe("ParksCanadaProvider — search", () => {
     expect(await search({ category: "accommodation" })).toEqual([]);
     expect(await search({ category: "group" })).toEqual([]);
     expect((await search({ category: "campsite" })).length).toBeGreaterThan(0);
+  });
+});
+
+describe("ParksCanadaProvider — Day Use (model 1)", () => {
+  it("finds open timed slots for a matched product, filtered by party size", async () => {
+    const slots = await makeProvider().searchDayUse({
+      query: "Moraine Lake shuttle",
+      startDate: "2026-07-15",
+      endDate: "2026-07-16",
+      partySize: 2,
+    });
+    expect(slots.length).toBeGreaterThan(0);
+    // The fixture's 0-quota slot must be dropped; everything returned fits the party.
+    expect(slots.every((s) => s.remaining >= 2)).toBe(true);
+    expect(slots.every((s) => s.product.includes("Moraine Lake"))).toBe(true);
+    // Slots carry the facility id (for booking reuse) and a human time-slot name.
+    expect(slots[0]!.campgroundId).toBe("-2147483642");
+    expect(slots.some((s) => /\d(am|pm)/i.test(s.slotName))).toBe(true);
+  });
+
+  it("excludes slots that cannot seat the whole party", async () => {
+    const slots = await makeProvider().searchDayUse({
+      query: "shuttle",
+      startDate: "2026-07-15",
+      endDate: "2026-07-16",
+      partySize: 9, // only the 10-quota slot qualifies
+    });
+    expect(slots.every((s) => s.remaining >= 9)).toBe(true);
+  });
+
+  it("returns nothing when no product matches the query", async () => {
+    expect(
+      await makeProvider().searchDayUse({
+        query: "zzzznotaproduct",
+        startDate: "2026-07-15",
+        endDate: "2026-07-16",
+      }),
+    ).toEqual([]);
   });
 });
 
