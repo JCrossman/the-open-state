@@ -21,6 +21,12 @@ import { NON_GROUP_EQUIPMENT } from "./constants.js";
 const DEFAULT_RATE_CATEGORY_ID = -32768;
 const DEFAULT_CHECK_IN_TIME = "14:00";
 const DEFAULT_CHECK_OUT_TIME = "11:00";
+/** Day Use (model 1) covers the whole open day, not an overnight window. */
+const DAY_USE_CHECK_IN_TIME = "10:00";
+const DAY_USE_CHECK_OUT_TIME = "23:59";
+
+/** Booking models that share this cart machinery (verified live / from HAR). */
+export const BOOKING_MODEL = { site: 0, dayUse: 1 } as const;
 
 /** Party capacity sub-categories (verified): the four age bands the wizard shows. */
 export const CAPACITY_CATEGORY_ID = -32767;
@@ -55,6 +61,8 @@ export interface BookingRequest {
   checkOutTime?: string;
   /** Booking category for the commit: 0 campsite (default), 1 accommodation, 2 group. */
   bookingCategoryId?: number;
+  /** Booking model: 0 = site/nights (default), 1 = Day Use time-slot. */
+  bookingModel?: number;
 }
 
 /**
@@ -64,6 +72,8 @@ export interface BookingRequest {
 export interface BookingIds {
   bookingUid: string;
   resourceBlockerUid: string;
+  /** Day Use holds the slot via a zone blocker instead of a resource blocker. */
+  resourceZoneBlockerUid: string;
 }
 
 /**
@@ -75,6 +85,7 @@ export function newBookingIds(): BookingIds {
   return {
     bookingUid: randomUUID(),
     resourceBlockerUid: randomUUID(),
+    resourceZoneBlockerUid: randomUUID(),
   };
 }
 
@@ -201,6 +212,7 @@ interface BookingRefs {
   cartUid: string;
   cartTransactionUid: string;
   resourceBlockerUid: string;
+  resourceZoneBlockerUid: string;
 }
 
 /** The site hold (resource blocker) for the chosen site and dates. */
@@ -227,6 +239,41 @@ export function buildResourceBlocker(
   };
 }
 
+/**
+ * The Day Use slot hold (resource *zone* blocker). Unlike the overnight resource
+ * blocker, it records `unitsBlocked` (the number of spots taken) and lands in the
+ * cart's `resourceZoneBlockers`. Verified against a captured shuttle booking.
+ */
+export function buildResourceZoneBlocker(
+  request: BookingRequest,
+  refs: BookingRefs,
+): Record<string, any> {
+  return {
+    resourceZoneBlockerUid: refs.resourceZoneBlockerUid,
+    bookingUid: refs.bookingUid,
+    groupHoldUid: null,
+    isReservation: true,
+    currentVersion: null,
+    history: [],
+    newVersion: {
+      cartTransactionUid: refs.cartTransactionUid,
+      blockerTransactionStatus: 0,
+      creationDate: new Date().toISOString(),
+      status: 0,
+      completedDate: null,
+      resourceLocationId: request.resourceLocationId,
+      resourceId: request.resourceId,
+      startDate: request.startDate,
+      endDate: request.endDate,
+      unitsBlocked: partySize(request.party),
+    },
+    drafts: [],
+    cartUid: refs.cartUid,
+    adminCartUid: null,
+    blockerType: 0,
+  };
+}
+
 /** The booking object (one site, one stay) added to the cart's `bookings`. */
 export function buildBooking(
   request: BookingRequest,
@@ -234,9 +281,18 @@ export function buildBooking(
   envelope: ShopperEnvelope,
   stage: BookingStage,
 ): Record<string, any> {
-  const equipmentCategoryId = request.equipmentCategoryId ?? NON_GROUP_EQUIPMENT;
-  const subEquipmentCategoryId = request.subEquipmentCategoryId ?? NON_GROUP_EQUIPMENT;
   const isHold = stage === "hold";
+  const isDayUse = (request.bookingModel ?? BOOKING_MODEL.site) === BOOKING_MODEL.dayUse;
+  // Day Use carries no equipment and holds the slot via a zone blocker; overnight
+  // sites carry equipment and a resource blocker.
+  const equipmentCategoryId = isDayUse
+    ? null
+    : (request.equipmentCategoryId ?? NON_GROUP_EQUIPMENT);
+  const subEquipmentCategoryId = isDayUse
+    ? null
+    : (request.subEquipmentCategoryId ?? NON_GROUP_EQUIPMENT);
+  const checkIn = isDayUse ? DAY_USE_CHECK_IN_TIME : DEFAULT_CHECK_IN_TIME;
+  const checkOut = isDayUse ? DAY_USE_CHECK_OUT_TIME : DEFAULT_CHECK_OUT_TIME;
   const newVersion: Record<string, any> = {
     cartTransactionUid: refs.cartTransactionUid,
     bookingMembers: stage === "finalize" ? [bookingHolderMember(envelope)] : [],
@@ -244,9 +300,9 @@ export function buildBooking(
     bookingBoats: [],
     bookingCapacityCategoryCounts: partyCapacityCounts(request.party),
     rateCategoryId: request.rateCategoryId ?? DEFAULT_RATE_CATEGORY_ID,
-    resourceBlockerUids: [refs.resourceBlockerUid],
+    resourceBlockerUids: isDayUse ? [] : [refs.resourceBlockerUid],
     resourceNonSpecificBlockerUids: [],
-    resourceZoneBlockerUids: [],
+    resourceZoneBlockerUids: isDayUse ? [refs.resourceZoneBlockerUid] : [],
     resourceZoneEntryBlockerUids: [],
     startDate: request.startDate,
     endDate: request.endDate,
@@ -268,15 +324,17 @@ export function buildBooking(
     passExpiryDate: null,
     passNumber: "",
     resourceLocationId: request.resourceLocationId,
-    checkInTime: isHold ? null : (request.checkInTime ?? DEFAULT_CHECK_IN_TIME),
-    checkOutTime: isHold ? null : (request.checkOutTime ?? DEFAULT_CHECK_OUT_TIME),
+    // Day Use times are fixed (full open day) and sent at every stage; overnight
+    // sites take them from the resource model and only after the hold.
+    checkInTime: isDayUse ? checkIn : isHold ? null : (request.checkInTime ?? checkIn),
+    checkOutTime: isDayUse ? checkOut : isHold ? null : (request.checkOutTime ?? checkOut),
     deferredPayment: false,
   };
   return {
     bookingUid: refs.bookingUid,
     cartUid: refs.cartUid,
     bookingCategoryId: request.bookingCategoryId ?? 0,
-    bookingModel: 0,
+    bookingModel: request.bookingModel ?? BOOKING_MODEL.site,
     newVersion,
     createTransactionUid: refs.cartTransactionUid,
     currentVersion: null,
@@ -319,8 +377,15 @@ export function buildBookingCart(
     cartUid,
     cartTransactionUid,
     resourceBlockerUid: ids.resourceBlockerUid,
+    resourceZoneBlockerUid: ids.resourceZoneBlockerUid,
   };
   cart["bookings"] = [buildBooking(request, refs, envelope, stage)];
-  cart["resourceBlockers"] = [buildResourceBlocker(request, refs)];
+  // Day Use holds the slot in resourceZoneBlockers; overnight sites in resourceBlockers.
+  if ((request.bookingModel ?? BOOKING_MODEL.site) === BOOKING_MODEL.dayUse) {
+    cart["resourceZoneBlockers"] = [buildResourceZoneBlocker(request, refs)];
+    cart["resourceBlockers"] = [];
+  } else {
+    cart["resourceBlockers"] = [buildResourceBlocker(request, refs)];
+  }
   return { cart };
 }

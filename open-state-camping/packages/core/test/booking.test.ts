@@ -164,10 +164,10 @@ describe("booking cart assembly — wizard stages", () => {
 });
 
 describe("booking ids", () => {
-  it("mints two distinct client GUIDs (the server assigns cart + transaction ids)", () => {
+  it("mints three distinct client GUIDs (the server assigns cart + transaction ids)", () => {
     const ids = newBookingIds();
     const values = Object.values(ids);
-    expect(new Set(values).size).toBe(2);
+    expect(new Set(values).size).toBe(3);
     for (const v of values) {
       expect(v).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
     }
@@ -207,6 +207,42 @@ describe("booking cart assembly — variations (shake-out beyond the captured pa
       { capacityCategoryId: -32767, count: 1, subCapacityCategoryId: -32766 },
       { capacityCategoryId: -32767, count: 2, subCapacityCategoryId: -32765 },
     ]);
+  });
+});
+
+describe("booking cart assembly — Day Use (model 1)", () => {
+  // Mirrors the captured Moraine Lake / Lake Louise shuttle cart.
+  const dayUseReq: BookingRequest = {
+    resourceId: -2147476636, // a time-slot resource
+    resourceLocationId: -2147483642,
+    startDate: "2099-07-15",
+    endDate: "2099-07-16",
+    party: { adults: 2 },
+    bookingCategoryId: 9,
+    bookingModel: 1,
+  };
+
+  it("holds the slot via a zone blocker, not a resource blocker", () => {
+    const { cart } = buildBookingCart(baseCart(), dayUseReq, ids, envelope, "finalize");
+    expect(cart.resourceBlockers).toEqual([]);
+    const zb = cart.resourceZoneBlockers[0].newVersion;
+    expect(zb.resourceId).toBe(-2147476636);
+    expect(zb.resourceLocationId).toBe(-2147483642);
+    expect(zb.unitsBlocked).toBe(2); // one unit per head in the party
+    const nv = cart.bookings[0].newVersion;
+    expect(nv.resourceZoneBlockerUids).toEqual([ids.resourceZoneBlockerUid]);
+    expect(nv.resourceBlockerUids).toEqual([]);
+  });
+
+  it("carries no equipment and the full-day check-in/out window, as model 1", () => {
+    const { cart } = buildBookingCart(baseCart(), dayUseReq, ids, envelope, "finalize");
+    const booking = cart.bookings[0];
+    expect(booking.bookingModel).toBe(1);
+    expect(booking.bookingCategoryId).toBe(9);
+    expect(booking.newVersion.equipmentCategoryId).toBeNull();
+    expect(booking.newVersion.subEquipmentCategoryId).toBeNull();
+    expect(booking.newVersion.checkInTime).toBe("10:00");
+    expect(booking.newVersion.checkOutTime).toBe("23:59");
   });
 });
 

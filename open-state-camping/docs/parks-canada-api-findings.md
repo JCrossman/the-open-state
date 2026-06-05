@@ -236,10 +236,22 @@ The day grid is `POST /api/availability/dailyactivity` with **body = array of sl
 the response is per-slot per-day `availabilityResult.remainingReservableQuota`.
 
 **Day Use SEARCH is built** (`searchDayUse` + `search_day_use` tool), tested
-against the captured response. **Booking is not yet built** — the captured HAR was
-browse-only (no `/api/cart` calls), so the day-use cart shape still needs a HAR that
-includes add-to-cart → payment. ("(Park Use)" slots are filtered out as
-staff/internal.)
+against the captured response. ("(Park Use)" slots are filtered out as staff/internal.)
+
+**Day Use BOOKING is built** (from a second, payment-reaching HAR). The model-1 cart
+differs from model 0 in exactly these ways (our generated cart is a key-for-key match
+to the capture):
+- `booking.bookingModel = 1`, `bookingCategoryId =` the product id (e.g. shuttle 9);
+- `equipmentCategoryId`/`subEquipmentCategoryId` are **null** (no equipment);
+- `checkInTime "10:00"`, `checkOutTime "23:59"` (the full open day), sent every stage;
+- the slot is held by a **`resourceZoneBlocker`** (carrying the slot `resourceId` and
+  `unitsBlocked` = party size) in `cart.resourceZoneBlockers`, referenced by the
+  booking's `resourceZoneBlockerUids`; `resourceBlockers` is empty. The zone-blocker
+  UID is client-generated. Same staged `POST /api/cart/commit` (isCompleted=false),
+  stopping before payment.
+
+Day Use booking is wired into `prepare_booking` (pass `product_id`); **not yet
+confirmed against a live session** — needs one fee-free drive-to-payment test.
 
 ## Divergences from camply (camply 0.34.2 is stale for this host)
 

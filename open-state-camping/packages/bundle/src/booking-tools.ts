@@ -14,6 +14,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
+  addDays,
   BOOKING_CATEGORY_ID,
   BOOKING_STAGES,
   buildBookingCart,
@@ -59,7 +60,10 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
         campground_id: z.string().describe("The campground's resourceLocationId (from search)."),
         site_id: z.string().describe("The chosen campsite's id (campsiteId/resourceId from search)."),
         start_date: z.string().describe("Arrival date, YYYY-MM-DD."),
-        end_date: z.string().describe("Departure date, YYYY-MM-DD."),
+        end_date: z
+          .string()
+          .optional()
+          .describe("Departure date, YYYY-MM-DD. Optional for Day Use (single day)."),
         adults: z.number().int().min(0).optional().describe("Adults 18-64 (default 1)."),
         seniors: z.number().int().min(0).optional().describe("Seniors 65+."),
         youth: z.number().int().min(0).optional().describe("Youth 6-17."),
@@ -79,6 +83,15 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
             "Match what you searched: 'campsite' (default), 'group', or " +
               "'accommodation' (oTENTik, cabin, yurt).",
           ),
+        product_id: z
+          .string()
+          .optional()
+          .describe(
+            "For a Day Use booking (shuttle, parking, guided event): the product id " +
+              "from search_day_use (its productId). When set, site_id is the time " +
+              "slot, campground_id is the facility, start_date is the day, and end_date " +
+              "may be omitted. Leave empty for overnight sites/accommodations.",
+          ),
         confirm: z
           .boolean()
           .optional()
@@ -91,7 +104,18 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
         return text("You're not connected yet. Run connect_account to sign in first.");
       }
 
-      const dateIssue = stayDatesProblem(args.start_date, args.end_date);
+      // Day Use is a single day held over one night-window in the cart (start → start+1);
+      // overnight stays need an explicit, later departure date.
+      const isDayUse = args.product_id != null;
+      const endDate = isDayUse
+        ? args.end_date && args.end_date > args.start_date
+          ? args.end_date
+          : addDays(args.start_date, 1)
+        : args.end_date;
+      if (!endDate) {
+        return text("Please give a departure date (end_date) for an overnight stay.");
+      }
+      const dateIssue = stayDatesProblem(args.start_date, endDate);
       if (dateIssue) return text(dateIssue);
 
       const party: PartyCounts = {
@@ -119,12 +143,15 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
 
       // Book the equipment the citizen actually wants (the site was found open for
       // it). Resolve the word/id; a bad value is flagged, not silently defaulted.
+      // Day Use carries no equipment, so skip it there.
       let subEquipmentCategoryId: number | undefined;
-      try {
-        const resolved = await provider.resolveEquipment(args.equipment_type ?? null);
-        subEquipmentCategoryId = resolved ?? undefined;
-      } catch (err) {
-        return text(err instanceof Error ? err.message : String(err));
+      if (!isDayUse) {
+        try {
+          const resolved = await provider.resolveEquipment(args.equipment_type ?? null);
+          subEquipmentCategoryId = resolved ?? undefined;
+        } catch (err) {
+          return text(err instanceof Error ? err.message : String(err));
+        }
       }
 
       const group: CategoryGroup = args.category ?? "campsite";
@@ -132,10 +159,11 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
         resourceId: Number(args.site_id),
         resourceLocationId: Number(args.campground_id),
         startDate: args.start_date,
-        endDate: args.end_date,
+        endDate,
         party,
         subEquipmentCategoryId,
-        bookingCategoryId: BOOKING_CATEGORY_ID[group],
+        bookingCategoryId: isDayUse ? Number(args.product_id) : BOOKING_CATEGORY_ID[group],
+        bookingModel: isDayUse ? 1 : undefined,
       };
 
       const summary = bookingSummary(request, party, envelope, args.equipment_type);
