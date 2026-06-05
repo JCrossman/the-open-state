@@ -184,6 +184,33 @@ booking was driven to the payment screen against a real signed-in session (a cab
 held, no payment) on 2026-06-05; the only difference from a campsite booking is the
 `bookingCategoryId` (0/2/1) and that accommodations send no equipment.
 
+## Booking models 1 (Day Use) & 5 (Backcountry) — read-only recon
+
+From `GET /api/bookingcategories` (bookingCategoryId → bookingModel → name):
+
+- **Model 0** (done): Campsite 0, Accommodation 1, Group 2 — **and also** West Coast
+  Trail 4, Long Range Mountains 13. The last two are model 0, so they likely book
+  through our *existing* flow once their bookingCategoryId is added (worth a quick
+  verify — potential low-hanging fruit).
+- **Model 1 — Day Use** (`resourceType` 2): Guided Hike 3, Parking 8, Shuttle to
+  Lake Louise & Moraine Lake 9, Lake O'Hara Day Use Bus 10, DayTripper 11, Fishing
+  12, Learn-to 14, Guided Event 15, Chilkoot Day Runner 16. **Time-slot** based
+  (start/end time, ticket quantities); `bookingCategoryId` is **per product/park**,
+  not one value. No equipment, no nights. *Medium* build: new time-slot availability
+  shape + a cart variant. Highest public demand (the Moraine Lake / Lake O'Hara
+  access lottery). Needs ~1 HAR at the booking step.
+- **Model 5 — Backcountry** (`resourceType` 3): Backcountry Campsite 5, Backcountry
+  Zone 7, Chilkoot Trail 17. Built on an **itinerary across zones over multiple
+  nights** (`itineraryBuilderHelper`, `tripValidationHelper`) plus **per-party-member
+  data collection** (`partyMember{Name,Age,Contact,Date,CapacityCategory,Note}
+  CollectionRequirement` — details for *each* person). *High* build: new itinerary
+  model + per-person roster + validation; also touches the identity surface. Smaller
+  user base. Needs 1+ HAR (itinerary build *and* commit).
+
+Recommendation: **Day Use first** — simpler model, far higher demand, cleaner reuse;
+roughly the size of the accommodations work plus a new availability/cart shape.
+Backcountry is ~2–3× that, mostly the itinerary builder + per-member collection.
+
 ## Divergences from camply (camply 0.34.2 is stale for this host)
 
 1. **`/api/resource/details` is GONE → HTTP 404.** This was camply's *only* source
