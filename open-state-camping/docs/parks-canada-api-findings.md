@@ -253,6 +253,28 @@ to the capture):
 Day Use booking is wired into `prepare_booking` (pass `product_id`); **not yet
 confirmed against a live session** — needs one fee-free drive-to-payment test.
 
+## Backcountry (model 5) — read-only recon
+
+Products (from `/api/bookingcategories`): Backcountry Campsite 5, Backcountry Zone 7,
+Chilkoot Trail 17 (West Coast Trail 4 and Long Range Mountains 13 are *model 0* and
+may book via the existing flow — verify-later freebies). 29 facilities carry a
+`resourceType` 3 category; their resources are **zones / trailheads** (e.g. "Emerald
+Lake Trailhead", category Backcountry Zone `-2147483632`) with null capacity/maxStay.
+
+From the SPA, a backcountry booking is a **multi-leg itinerary**: the itinerary
+builder collects, per leg, an **arrival date, departure date, and nights**, chaining
+zones from an entry trailhead (`/api/reachableresources/resourcelocationid` gives the
+zones reachable next). Availability is per-zone per-night quota
+(`/api/availability/map` + `resourcedailyavailability`); the search request object
+(`/api/availability/booking`) carries `accessPointResourceId`, `nights`,
+`peopleCapacityCategoryCounts`. Booking additionally requires **per-party-member data
+collection** (`partyMember{Name,Age,Contact,Date,CapacityCategory,Note}
+CollectionRequirement`).
+
+Not built. This is the largest model: itinerary builder + per-member roster + trip
+validation. Needs a HAR covering browse → itinerary build → payment to nail the cart
+shape (the `resourceZone*Blocker` / itinerary item / bookingMembers structure).
+
 ## Divergences from camply (camply 0.34.2 is stale for this host)
 
 1. **`/api/resource/details` is GONE → HTTP 404.** This was camply's *only* source
