@@ -211,6 +211,23 @@ Recommendation: **Day Use first** — simpler model, far higher demand, cleaner 
 roughly the size of the accommodations work plus a new availability/cart shape.
 Backcountry is ~2–3× that, mostly the itinerary builder + per-member collection.
 
+### Day Use availability endpoints (from SPA `chunk-SEEOSVZU.js`, partly probed live)
+
+Day Use does **not** use `/api/availability/map`. Two endpoints, both with query
+params `resourceLocationId, startDate, endDate, bookingCategoryId` and a JSON body:
+- `POST /api/availability/dailyactivity` — per-day availability list. Body `[]` is
+  accepted (**HTTP 200**, returns a JSON **array**; empty for a date with no
+  availability). This is the day-grid call.
+- `POST /api/availability/activity` — the detailed/slot call; body `[]` returns
+  **HTTP 400**, so it needs a specific request body (the `o` arg — a preferences/
+  selection object not yet captured).
+
+`bookingCategoryId` is **per product** (Lake O'Hara Bus 10, Lake Louise/Moraine
+Shuttle 9, Parking 8, …), and each maps to one day-use facility (e.g. "Yoho - Lake
+O'Hara Bus" rlid `-2147483536`, category Day Use Bus `-2147483626`). The populated
+slot shape, the `activity` POST body, and the booking cart are best captured from a
+single HAR of a real day-use booking (browse → payment).
+
 ## Divergences from camply (camply 0.34.2 is stale for this host)
 
 1. **`/api/resource/details` is GONE → HTTP 404.** This was camply's *only* source
