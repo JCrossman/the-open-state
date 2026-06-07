@@ -1,5 +1,42 @@
 [
-  { "resourceCategoryId": -2147483648, "resourceType": 0, "localizedValues": [{ "cultureName": "en-CA", "name": "Campsite" }] },
-  { "resourceCategoryId": -2147483640, "resourceType": 0, "localizedValues": [{ "cultureName": "en-CA", "name": "Group" }] },
-  { "resourceCategoryId": -2147483643, "resourceType": 0, "localizedValues": [{ "cultureName": "en-CA", "name": "oTENTik" }] }
+  {
+    "resourceCategoryId": -2147483648,
+    "resourceType": 0,
+    "localizedValues": [
+      {
+        "cultureName": "en-CA",
+        "name": "Campsite"
+      }
+    ]
+  },
+  {
+    "resourceCategoryId": -2147483640,
+    "resourceType": 0,
+    "localizedValues": [
+      {
+        "cultureName": "en-CA",
+        "name": "Group"
+      }
+    ]
+  },
+  {
+    "resourceCategoryId": -2147483643,
+    "resourceType": 0,
+    "localizedValues": [
+      {
+        "cultureName": "en-CA",
+        "name": "oTENTik"
+      }
+    ]
+  },
+  {
+    "resourceCategoryId": -2147483632,
+    "resourceType": 3,
+    "localizedValues": [
+      {
+        "cultureName": "en-CA",
+        "name": "Backcountry Zone"
+      }
+    ]
+  }
 ]

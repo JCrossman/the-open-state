@@ -75,5 +75,44 @@
         "fullName": "Pacific Rim - Broken Group Islands"
       }
     ]
+  },
+  {
+    "resourceLocationId": -2147483642,
+    "rootMapId": -2147483641,
+    "resourceCategoryIds": [
+      -2147483627
+    ],
+    "localizedValues": [
+      {
+        "cultureName": "en-CA",
+        "fullName": "Banff - Lake Louise Shuttle"
+      }
+    ]
+  },
+  {
+    "resourceLocationId": -2147483536,
+    "rootMapId": -2147483535,
+    "resourceCategoryIds": [
+      -2147483626
+    ],
+    "localizedValues": [
+      {
+        "cultureName": "en-CA",
+        "fullName": "Yoho - Lake O'Hara Bus"
+      }
+    ]
+  },
+  {
+    "resourceLocationId": -2147483637,
+    "rootMapId": -2147483636,
+    "resourceCategoryIds": [
+      -2147483628
+    ],
+    "localizedValues": [
+      {
+        "cultureName": "en-CA",
+        "fullName": "Bruce Peninsula - Parking"
+      }
+    ]
   }
 ]

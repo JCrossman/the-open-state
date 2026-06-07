@@ -155,20 +155,23 @@ export class ParksCanadaProvider {
     partySize?: number;
   }): Promise<DayUseSlot[]> {
     const need = Math.max(1, opts.partySize ?? 1);
-    const matched = await this.dayUseProducts(opts.query);
+    const pairs = await this.productFacilityPairs(1, opts.query);
 
     const slots: DayUseSlot[] = [];
-    for (const product of matched) {
-      const resources = await this.client.getResources(String(product.resourceLocationId));
-      // Public, bookable slots only — exclude staff/media/"Park Use" internal holds.
+    for (const { product, facility } of pairs) {
+      const rlid = String(facility.resourceLocationId);
+      const cats = new Set(product.allowedResourceCategoryIds);
+      const resources = await this.client.getResources(rlid);
+      // This product's slots only (a facility may host several products), and no
+      // staff/media "(Park Use)" internal holds.
       const entries = Object.values(resources).filter((r: any) => {
-        const name = resourceName(r) ?? "";
-        return !/\(park use\)/i.test(name);
+        if (!cats.has(r["resourceCategoryId"])) return false;
+        return !/\(park use\)/i.test(resourceName(r) ?? "");
       });
       const byId = new Map(entries.map((r: any) => [String(r["resourceId"]), r]));
       if (byId.size === 0) continue;
       const avail = await this.client.dayUseAvailability({
-        resourceLocationId: product.resourceLocationId,
+        resourceLocationId: rlid,
         resourceIds: [...byId.keys()],
         startDate: opts.startDate,
         endDate: opts.endDate,
@@ -183,7 +186,7 @@ export class ParksCanadaProvider {
           recreationAreaId: PARKS_CANADA_REC_AREA_ID,
           productId: String(product.bookingCategoryId),
           product: product.name,
-          campgroundId: String(product.resourceLocationId),
+          campgroundId: rlid,
           slotId: a.resourceId,
           slotName: resourceName(resource) ?? a.resourceId,
           date: a.date,
@@ -200,29 +203,56 @@ export class ParksCanadaProvider {
     return slots;
   }
 
-  /** Day Use products (bookingModel 1), optionally narrowed to a name/place query. */
-  private async dayUseProducts(query?: string): Promise<BookingCategoryRecord[]> {
-    const products = (await this.bookingCategories()).filter((p) => p.bookingModel === 1);
+  private async facilities(): Promise<CampgroundRecord[]> {
+    if (!this.facilitiesCache) this.facilitiesCache = await this.client.listFacilities();
+    return this.facilitiesCache;
+  }
+
+  /**
+   * Resolve a booking model's products to the facilities that offer them. The
+   * catalog (`/api/bookingcategories`) carries no resourceLocationId — only
+   * `allowedResourceCategoryIds` — so a product's facilities are those whose
+   * resource categories intersect. A product can span several facilities (e.g.
+   * "Backcountry Zone" → many parks), and a facility several products. The query is
+   * matched (all words) against the product name *and* facility name together, since
+   * day-use products name the place ("…(Banff)") but backcountry products are generic
+   * ("Backcountry Zone") and the place lives in the facility name.
+   */
+  private async productFacilityPairs(
+    model: number,
+    query?: string,
+  ): Promise<Array<{ product: BookingCategoryRecord; facility: CampgroundRecord }>> {
+    const products = (await this.bookingCategories()).filter((p) => p.bookingModel === model);
+    const facilities = await this.facilities();
     const words = (query ?? "").toLowerCase().split(/\s+/).filter((w) => w.length >= 4);
-    if (words.length === 0) return products;
-    return products.filter((p) => {
-      const name = p.name.toLowerCase();
-      return words.some((w) => name.includes(w));
-    });
+    const pairs: Array<{ product: BookingCategoryRecord; facility: CampgroundRecord }> = [];
+    for (const product of products) {
+      const cats = new Set(product.allowedResourceCategoryIds);
+      for (const facility of facilities) {
+        if (!facility.offeredCategoryIds.some((c) => cats.has(c))) continue;
+        const hay = `${product.name} ${facility.name ?? ""}`.toLowerCase();
+        if (words.every((w) => hay.includes(w))) pairs.push({ product, facility });
+      }
+    }
+    return pairs;
   }
 
   /** Browse the Day Use catalog — the products a citizen can pick (shuttles, parking,
    *  guided events, …), optionally filtered by name/place. No dates needed. */
   async listDayUseProducts(query?: string): Promise<DayUseProduct[]> {
-    return (await this.dayUseProducts(query))
-      .map((p) => ({
-        provider: PROVIDER_NAME,
-        recreationAreaId: PARKS_CANADA_REC_AREA_ID,
-        productId: String(p.bookingCategoryId),
-        product: p.name,
-        campgroundId: String(p.resourceLocationId),
-      }))
-      .sort((a, b) => a.product.localeCompare(b.product));
+    const byProduct = new Map<number, DayUseProduct>();
+    for (const { product, facility } of await this.productFacilityPairs(1, query)) {
+      if (!byProduct.has(product.bookingCategoryId)) {
+        byProduct.set(product.bookingCategoryId, {
+          provider: PROVIDER_NAME,
+          recreationAreaId: PARKS_CANADA_REC_AREA_ID,
+          productId: String(product.bookingCategoryId),
+          product: product.name,
+          campgroundId: String(facility.resourceLocationId),
+        });
+      }
+    }
+    return [...byProduct.values()].sort((a, b) => a.product.localeCompare(b.product));
   }
 
   private async bookingCategories(): Promise<BookingCategoryRecord[]> {
@@ -232,44 +262,36 @@ export class ParksCanadaProvider {
     return this.bookingCategoriesCache;
   }
 
-  /** Root map id for ANY facility (including backcountry/day-use, which aren't in
-   *  the site-filtered campground list). */
-  private async facilityRootMapId(rlid: string): Promise<number | string | null> {
-    if (!this.facilitiesCache) this.facilitiesCache = await this.client.listFacilities();
-    const f = this.facilitiesCache.find((x) => String(x.resourceLocationId) === String(rlid));
-    return f ? f.rootMapId : null;
-  }
-
-  /** Backcountry products (bookingModel 5), optionally narrowed by name/place. */
-  private async backcountryProducts(query?: string): Promise<BookingCategoryRecord[]> {
-    const products = (await this.bookingCategories()).filter((p) => p.bookingModel === 5);
-    const words = (query ?? "").toLowerCase().split(/\s+/).filter((w) => w.length >= 4);
-    if (words.length === 0) return products;
-    return products.filter((p) => {
-      const name = p.name.toLowerCase();
-      return words.some((w) => name.includes(w));
-    });
-  }
-
-  /** Browse the backcountry catalog — the areas/trips a citizen can pick. */
+  /** Browse the backcountry catalog — the areas a citizen can pick, by place. */
   async listBackcountryProducts(query?: string): Promise<BackcountryProduct[]> {
-    return (await this.backcountryProducts(query))
-      .map((p) => ({
+    const seen = new Set<string>();
+    const out: BackcountryProduct[] = [];
+    for (const { product, facility } of await this.productFacilityPairs(5, query)) {
+      const key = `${product.bookingCategoryId}:${facility.resourceLocationId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({
         provider: PROVIDER_NAME,
         recreationAreaId: PARKS_CANADA_REC_AREA_ID,
-        productId: String(p.bookingCategoryId),
-        product: p.name,
-        campgroundId: String(p.resourceLocationId),
-      }))
-      .sort((a, b) => a.product.localeCompare(b.product));
+        productId: String(product.bookingCategoryId),
+        product: `${facility.name} — ${product.name}`,
+        campgroundId: String(facility.resourceLocationId),
+      });
+    }
+    return out.sort((a, b) => a.product.localeCompare(b.product));
   }
 
   /**
    * Search backcountry (model 5) zones for nights with room for the party. Each zone
    * is one itinerary leg (one zone per night); availability is a per-night quota, so
-   * a night is "open" when the remaining count is at least the party size. A trip is
-   * composed from these zones via prepare_booking's itinerary. Accessibility, where
-   * the zone exposes it, is surfaced first-class (Constitution Art. 3).
+   * a night is "open" when the remaining count is at least the party size. The
+   * product (Backcountry Campsite 5 / Zone 7 / Chilkoot 17) and facility come from the
+   * documented `allowedResourceCategoryIds` mapping, and we book under that same
+   * product. Accessibility is surfaced first-class (Constitution Art. 3).
+   *
+   * NOTE: not yet live-confirmed against a populated backcountry result — the booking
+   * cart is HAR-matched, but which `bookingCategoryId` a given area books under needs
+   * one live confirmation (see docs).
    */
   async searchBackcountry(opts: {
     query: string;
@@ -279,15 +301,14 @@ export class ParksCanadaProvider {
     accessibleOnly?: boolean;
   }): Promise<BackcountryZone[]> {
     const need = Math.max(1, opts.partySize ?? 1);
-    const matched = await this.backcountryProducts(opts.query);
+    const pairs = await this.productFacilityPairs(5, opts.query);
     const window = windowNights(opts.startDate, opts.endDate);
 
     const zones: BackcountryZone[] = [];
-    for (const product of matched) {
-      const rlid = String(product.resourceLocationId);
-      // Backcountry facilities aren't in the (site-filtered) campground list, so
-      // resolve their root map from the unfiltered facility list.
-      const rootMapId = await this.facilityRootMapId(rlid);
+    for (const { product, facility } of pairs) {
+      const rlid = String(facility.resourceLocationId);
+      const cats = new Set(product.allowedResourceCategoryIds);
+      const rootMapId = facility.rootMapId;
       if (rootMapId == null) continue;
       const resources = await this.client.getResources(rlid);
       const daily = await this.client.dailyAvailability({
@@ -301,8 +322,8 @@ export class ParksCanadaProvider {
       for (const [zoneId, counts] of Object.entries(daily)) {
         const resource = resources[zoneId];
         if (!resource) continue;
-        // Backcountry availability is a remaining-quota count per night (not a
-        // status code): a night has room when at least the whole party fits.
+        // Only this product's zones (a facility may host several products).
+        if (!cats.has(resource["resourceCategoryId"])) continue;
         const open: ISODate[] = [];
         let minRemaining = Infinity;
         window.forEach((night, i) => {
@@ -319,7 +340,7 @@ export class ParksCanadaProvider {
           provider: PROVIDER_NAME,
           recreationAreaId: PARKS_CANADA_REC_AREA_ID,
           productId: String(product.bookingCategoryId),
-          product: product.name,
+          product: `${facility.name} — ${product.name}`,
           campgroundId: rlid,
           zoneId,
           zoneName: resourceName(resource) ?? zoneId,

@@ -226,17 +226,33 @@ params `resourceLocationId, startDate, endDate, bookingCategoryId` and a JSON bo
 Shuttle 9, Parking 8, …), and each maps to one day-use facility (e.g. "Yoho - Lake
 O'Hara Bus" rlid `-2147483536`, category Day Use Bus `-2147483626`).
 
-**Verified from a captured shuttle session (HAR):** the catalog comes from
-`/api/bookingcategories` (each entry carries `bookingCategoryId, bookingModel,
-resourceLocationId, name`). A facility's **timed slots are its resources** —
+**Verified live:** the catalog comes from `/api/bookingcategories`, but each entry
+carries `bookingCategoryId, bookingModel, name` and **`allowedResourceCategoryIds`** —
+**not** a `resourceLocationId` (an early wrong assumption that broke search until
+fixed). A product's facilities are those whose `resourceCategoryIds` intersect its
+`allowedResourceCategoryIds`; a product can span several facilities and vice-versa, so
+search resolves product↔facility pairs and matches the query against product + facility
+name. A facility's **timed slots are its resources** —
 `GET /api/resourcelocation/resources` returns e.g. "Moraine Lake: 6:30am-7am",
 "Lake Louise: 8am-9am", "…(Last Minute)", "…(Park Use)" (each `maxCapacity` 10).
 The day grid is `POST /api/availability/dailyactivity` with **body = array of slot
 `resourceId`s** and query `resourceLocationId,startDate,endDate,bookingCategoryId`;
 the response is per-slot per-day `availabilityResult.remainingReservableQuota`.
 
-**Day Use SEARCH is built** (`searchDayUse` + `search_day_use` tool), tested
-against the captured response. ("(Park Use)" slots are filtered out as staff/internal.)
+**Day Use SEARCH is built and verified live** (`searchDayUse` + `search_day_use`):
+"Moraine Lake shuttle" for a real date returns the open time slots with spots left.
+("(Park Use)" slots are filtered out as staff/internal.)
+
+⚠️ **Backcountry caveat:** the same `allowedResourceCategoryIds` mapping is *not* a
+reliable product selector for backcountry. Probing Broken Group Islands (rlid
+-2147483563, all zones category "Backcountry Zone" -2147483632) returned **0
+availability under bcid 7 (Zone) but 5 under bcid 5 (Campsite) and 17 (Chilkoot)** —
+i.e. `bookingCategoryId` changes the numbers and the category→product link doesn't hold.
+The captured booking used bcid 5 at a *different* facility id (-2147483598), so the two
+"Broken Group" facilities may be distinct products. We currently book backcountry under
+the documented category→product mapping, but **which `bookingCategoryId` an area books
+under is not yet live-confirmed** — needs a backcountry *search* HAR (to see the bcid the
+SPA queries) before backcountry booking is trustworthy. (Day Use is unaffected.)
 
 **Day Use BOOKING is built** (from a second, payment-reaching HAR). The model-1 cart
 differs from model 0 in exactly these ways (our generated cart is a key-for-key match

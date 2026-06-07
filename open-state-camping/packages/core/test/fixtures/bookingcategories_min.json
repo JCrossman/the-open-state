@@ -2,7 +2,9 @@
   {
     "bookingCategoryId": 9,
     "bookingModel": 1,
-    "resourceLocationId": -2147483642,
+    "allowedResourceCategoryIds": [
+      -2147483627
+    ],
     "localizedValues": [
       {
         "cultureName": "en-CA",
@@ -13,7 +15,9 @@
   {
     "bookingCategoryId": 10,
     "bookingModel": 1,
-    "resourceLocationId": -2147483536,
+    "allowedResourceCategoryIds": [
+      -2147483626
+    ],
     "localizedValues": [
       {
         "cultureName": "en-CA",
@@ -24,7 +28,9 @@
   {
     "bookingCategoryId": 8,
     "bookingModel": 1,
-    "resourceLocationId": -2147483600,
+    "allowedResourceCategoryIds": [
+      -2147483628
+    ],
     "localizedValues": [
       {
         "cultureName": "en-CA",
@@ -35,7 +41,9 @@
   {
     "bookingCategoryId": 0,
     "bookingModel": 0,
-    "resourceLocationId": -2147483644,
+    "allowedResourceCategoryIds": [
+      -2147483648
+    ],
     "localizedValues": [
       {
         "cultureName": "en-CA",
@@ -46,11 +54,13 @@
   {
     "bookingCategoryId": 5,
     "bookingModel": 5,
-    "resourceLocationId": -2147480000,
+    "allowedResourceCategoryIds": [
+      -2147483632
+    ],
     "localizedValues": [
       {
         "cultureName": "en-CA",
-        "name": "Broken Group Islands Backcountry"
+        "name": "Backcountry Zone"
       }
     ]
   }

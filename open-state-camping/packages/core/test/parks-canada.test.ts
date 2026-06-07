@@ -243,10 +243,12 @@ describe("ParksCanadaProvider — Day Use (model 1)", () => {
 });
 
 describe("ParksCanadaProvider — Backcountry (model 5)", () => {
-  it("browses the backcountry catalog (model 5 only)", async () => {
+  it("browses the backcountry catalog by area (facility — product)", async () => {
     const all = await makeProvider().listBackcountryProducts();
-    expect(all.map((p) => p.product)).toContain("Broken Group Islands Backcountry");
-    expect(all.every((p) => p.productId === "5")).toBe(true);
+    const bg = all.find((p) => p.product.includes("Broken Group Islands"));
+    expect(bg).toBeDefined();
+    expect(bg!.campgroundId).toBe("-2147480000");
+    expect(bg!.productId).toBe("5");
   });
 
   it("returns zones with room for the party, accessibility surfaced", async () => {

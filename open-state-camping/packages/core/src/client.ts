@@ -42,11 +42,13 @@ export interface EquipmentRecord {
 /** Per-day availability code list, keyed by `resourceId`. */
 export type DailyAvailability = Record<string, (number | null)[]>;
 
-/** A bookable product/tab (e.g. a specific shuttle, parking lot, campsite group). */
+/** A bookable product/tab (e.g. a specific shuttle, parking lot, backcountry area). */
 export interface BookingCategoryRecord {
   bookingCategoryId: number;
   bookingModel: number;
-  resourceLocationId: number | string;
+  /** Resource categories this product covers; facilities offering any of them are
+   *  this product's facilities (the catalog carries no resourceLocationId). */
+  allowedResourceCategoryIds: number[];
   name: string;
 }
 
@@ -223,8 +225,10 @@ export class GoingToCampClient {
     return out;
   }
 
-  /** All bookable products/tabs (campsites, shuttles, parking, …) with their
-   *  model + facility — the Day Use catalog lives here (bookingModel 1). */
+  /** All bookable products/tabs (campsites, shuttles, parking, backcountry, …) with
+   *  their model + covered resource categories. The Day Use and Backcountry catalogs
+   *  live here (bookingModel 1 and 5); facilities are resolved from
+   *  `allowedResourceCategoryIds` (the catalog carries no resourceLocationId). */
   async listBookingCategories(): Promise<BookingCategoryRecord[]> {
     const data = (await this.get("/api/bookingcategories")) as
       | Array<Record<string, any>>
@@ -236,7 +240,7 @@ export class GoingToCampClient {
       out.push({
         bookingCategoryId: id,
         bookingModel: c["bookingModel"],
-        resourceLocationId: c["resourceLocationId"],
+        allowedResourceCategoryIds: c["allowedResourceCategoryIds"] ?? [],
         name: (localized(c["localizedValues"], "name") as string) ?? "",
       });
     }
