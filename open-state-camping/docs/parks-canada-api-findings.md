@@ -293,11 +293,16 @@ and surfaces accessibility first-class (`accessible_only` filter). Backcountry
 facilities aren't in the site-filtered campground list, so root maps resolve via an
 unfiltered `listFacilities()`.
 
-Remaining for model 5: wire `prepare_booking` to take the multi-leg itinerary (the
-cart engine is built and HAR-matched), resolve the backcountry equipment
-(`subEquipmentCategoryId`, e.g. `-32758` in the capture), then a fee-free confirm
-test. Per Constitution Art. 2.4 (contested, time-limited resources) we keep this
+**Booking is wired.** `prepare_booking` takes an `itinerary` (one `{zone_id,
+start_date, end_date}` per night) plus the `product_id`; it builds the model-5 cart
+(one resource blocker per leg) and resolves the permit equipment from the **zone's own
+`allowedEquipment`** (e.g. `{-32767,-32758}` — the first allowed option, what the
+capture used) rather than hardcoding. Same staged commits, stops before payment.
+Per Constitution Art. 2.4 (contested, time-limited resources) this stays
 **prepare-on-demand only** — no auto-prepare/snipe at permit-release moments.
+
+Remaining for model 5: one fee-free drive-to-payment confirm test against a live
+session (the cart is structurally HAR-matched; the request→cart path is verified).
 
 ## Divergences from camply (camply 0.34.2 is stale for this host)
 

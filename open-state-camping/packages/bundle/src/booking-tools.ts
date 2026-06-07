@@ -57,9 +57,15 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
         "connected, this tool will say so — then call connect_account, don't give " +
         "up). Use site_id and campground_id from search_sites.",
       inputSchema: {
-        campground_id: z.string().describe("The campground's resourceLocationId (from search)."),
-        site_id: z.string().describe("The chosen campsite's id (campsiteId/resourceId from search)."),
-        start_date: z.string().describe("Arrival date, YYYY-MM-DD."),
+        campground_id: z.string().describe("The campground/facility resourceLocationId (from search)."),
+        site_id: z
+          .string()
+          .optional()
+          .describe("The chosen site/slot id (from search). Omit for a Backcountry trip (use itinerary)."),
+        start_date: z
+          .string()
+          .optional()
+          .describe("Arrival date, YYYY-MM-DD. Omit for Backcountry (taken from the itinerary)."),
         end_date: z
           .string()
           .optional()
@@ -87,10 +93,24 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
           .string()
           .optional()
           .describe(
-            "For a Day Use booking (shuttle, parking, guided event): the product id " +
-              "from search_day_use (its productId). When set, site_id is the time " +
-              "slot, campground_id is the facility, start_date is the day, and end_date " +
-              "may be omitted. Leave empty for overnight sites/accommodations.",
+            "For a Day Use booking (shuttle, parking, guided event) OR a Backcountry " +
+              "trip: the product id from search_day_use / search_backcountry (its " +
+              "productId). For Day Use, site_id is the time slot. For Backcountry, pass " +
+              "`itinerary` instead. Leave empty for overnight sites/accommodations.",
+          ),
+        itinerary: z
+          .array(
+            z.object({
+              zone_id: z.string().describe("The zone's internal id from search_backcountry."),
+              start_date: z.string().describe("Night's arrival, YYYY-MM-DD."),
+              end_date: z.string().describe("Night's departure, YYYY-MM-DD (usually next day)."),
+            }),
+          )
+          .optional()
+          .describe(
+            "For a Backcountry trip: one entry per night (a zone for a date range), in " +
+              "order. Requires product_id and campground_id (the facility). The trip " +
+              "spans the first arrival to the last departure.",
           ),
         confirm: z
           .boolean()
@@ -104,19 +124,40 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
         return text("You're not connected yet. Run connect_account to sign in first.");
       }
 
-      // Day Use is a single day held over one night-window in the cart (start → start+1);
-      // overnight stays need an explicit, later departure date.
-      const isDayUse = args.product_id != null;
-      const endDate = isDayUse
-        ? args.end_date && args.end_date > args.start_date
-          ? args.end_date
-          : addDays(args.start_date, 1)
-        : args.end_date;
-      if (!endDate) {
-        return text("Please give a departure date (end_date) for an overnight stay.");
+      // Three booking shapes share this flow: overnight site (model 0), Day Use
+      // time-slot (model 1), and a Backcountry multi-night itinerary (model 5).
+      const itinerary = args.itinerary ?? [];
+      const isBackcountry = itinerary.length > 0;
+      const isDayUse = !isBackcountry && args.product_id != null;
+
+      let startDate: string;
+      let endDate: string;
+      if (isBackcountry) {
+        if (!args.product_id) {
+          return text("A backcountry trip needs product_id (from search_backcountry).");
+        }
+        for (const leg of itinerary) {
+          const li = stayDatesProblem(leg.start_date, leg.end_date);
+          if (li) return text(`Itinerary problem — ${li}`);
+        }
+        startDate = itinerary[0]!.start_date;
+        endDate = itinerary[itinerary.length - 1]!.end_date;
+      } else {
+        if (!args.start_date) return text("Please give an arrival date (start_date).");
+        if (!args.site_id) return text("Please give the site_id to book.");
+        startDate = args.start_date;
+        // Day Use is a single day held over one night-window (start → start+1).
+        endDate = isDayUse
+          ? args.end_date && args.end_date > startDate
+            ? args.end_date
+            : addDays(startDate, 1)
+          : (args.end_date ?? "");
+        if (!endDate) {
+          return text("Please give a departure date (end_date) for an overnight stay.");
+        }
+        const dateIssue = stayDatesProblem(startDate, endDate);
+        if (dateIssue) return text(dateIssue);
       }
-      const dateIssue = stayDatesProblem(args.start_date, endDate);
-      if (dateIssue) return text(dateIssue);
 
       const party: PartyCounts = {
         adults: args.adults ?? 1,
@@ -141,11 +182,23 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
         );
       }
 
-      // Book the equipment the citizen actually wants (the site was found open for
-      // it). Resolve the word/id; a bad value is flagged, not silently defaulted.
-      // Day Use carries no equipment, so skip it there.
+      // Equipment: a site takes the citizen's chosen gear; Day Use carries none; a
+      // backcountry permit takes the zone's own allowed equipment.
+      let equipmentCategoryId: number | undefined;
       let subEquipmentCategoryId: number | undefined;
-      if (!isDayUse) {
+      let equipLabel = args.equipment_type;
+      if (isBackcountry) {
+        const bc = await provider.backcountryEquipment(
+          args.campground_id,
+          itinerary[0]!.zone_id,
+        );
+        if (!bc) {
+          return text("I couldn't determine the backcountry permit equipment for that zone.");
+        }
+        equipmentCategoryId = bc.equipmentCategoryId;
+        subEquipmentCategoryId = bc.subEquipmentCategoryId;
+        equipLabel = "backcountry permit";
+      } else if (!isDayUse) {
         try {
           const resolved = await provider.resolveEquipment(args.equipment_type ?? null);
           subEquipmentCategoryId = resolved ?? undefined;
@@ -156,17 +209,28 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
 
       const group: CategoryGroup = args.category ?? "campsite";
       const request: BookingRequest = {
-        resourceId: Number(args.site_id),
+        resourceId: Number(isBackcountry ? itinerary[0]!.zone_id : args.site_id),
         resourceLocationId: Number(args.campground_id),
-        startDate: args.start_date,
+        startDate,
         endDate,
         party,
+        equipmentCategoryId,
         subEquipmentCategoryId,
-        bookingCategoryId: isDayUse ? Number(args.product_id) : BOOKING_CATEGORY_ID[group],
-        bookingModel: isDayUse ? 1 : undefined,
+        bookingCategoryId:
+          isBackcountry || isDayUse
+            ? Number(args.product_id)
+            : BOOKING_CATEGORY_ID[group],
+        bookingModel: isBackcountry ? 5 : isDayUse ? 1 : undefined,
+        itinerary: isBackcountry
+          ? itinerary.map((l) => ({
+              resourceId: Number(l.zone_id),
+              startDate: l.start_date,
+              endDate: l.end_date,
+            }))
+          : undefined,
       };
 
-      const summary = bookingSummary(request, party, envelope, args.equipment_type);
+      const summary = bookingSummary(request, party, envelope, equipLabel);
 
       // Phase 1 — prepare and describe only. Nothing is held or written.
       if (!args.confirm) {
@@ -302,13 +366,23 @@ function bookingSummary(
     party.youth ? `${party.youth} youth` : "",
     party.children ? `${party.children} child${party.children === 1 ? "" : "ren"}` : "",
   ].filter(Boolean);
-  const lines = [
-    "Here's the booking I'll prepare:",
-    `- Site: ${request.resourceId} (campground ${request.resourceLocationId})`,
+  const lines = ["Here's the booking I'll prepare:"];
+  if (request.itinerary && request.itinerary.length > 0) {
+    // Backcountry: one zone per night — show the whole route.
+    lines.push(`- Backcountry trip (facility ${request.resourceLocationId}):`);
+    for (const leg of request.itinerary) {
+      lines.push(
+        `    ${withWeekday(leg.startDate)} → ${withWeekday(leg.endDate)} in zone ${leg.resourceId}`,
+      );
+    }
+  } else {
+    lines.push(`- Site: ${request.resourceId} (campground ${request.resourceLocationId})`);
+  }
+  lines.push(
     `- Dates: ${withWeekday(request.startDate)} to ${withWeekday(request.endDate)}` +
       (nights ? ` (${nights} night${nights === 1 ? "" : "s"})` : ""),
     `- Party: ${partyParts.join(", ") || "1 adult"}`,
-  ];
+  );
   if (equipmentLabel) lines.push(`- Equipment: ${equipmentLabel}`);
   lines.push(`- Reservation for: ${who}`);
   return lines.join("\n");

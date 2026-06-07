@@ -338,6 +338,24 @@ export class ParksCanadaProvider {
     return zones;
   }
 
+  /** The equipment a backcountry zone expects (from its `allowedEquipment`). The
+   *  booking carries one equipment pair for the trip; we default to the zone's first
+   *  allowed option (what the captured booking used). Returns null if none listed. */
+  async backcountryEquipment(
+    campgroundId: string,
+    zoneId: string,
+  ): Promise<{ equipmentCategoryId: number; subEquipmentCategoryId: number } | null> {
+    const resources = await this.client.getResources(campgroundId);
+    const zone = resources[String(zoneId)];
+    const allowed = (zone?.["allowedEquipment"] ?? []) as Array<Record<string, number>>;
+    const first = allowed[0];
+    if (!first) return null;
+    return {
+      equipmentCategoryId: first["equipmentCategoryId"]!,
+      subEquipmentCategoryId: first["subEquipmentCategoryId"]!,
+    };
+  }
+
   async searchSites(opts: SearchSitesOptions): Promise<AvailableSite[]> {
     const rootMapId = await this.rootMapId(opts.campgroundId);
     if (rootMapId == null) {
