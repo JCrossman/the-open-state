@@ -4,6 +4,7 @@
  * Accessibility is first-class and filterable (Constitution Art. 3).
  */
 import {
+  BACKCOUNTRY_EQUIPMENT_CATEGORY,
   BOOKING_CATEGORY_ID,
   BOOKING_GROUP,
   bookingGroupForCategory,
@@ -34,6 +35,8 @@ import {
 import { localized } from "./util.js";
 import type {
   AvailableSite,
+  BackcountryProduct,
+  BackcountryZone,
   CampgroundAvailability,
   DayUseProduct,
   DayUseSlot,
@@ -81,6 +84,7 @@ export class ParksCanadaProvider {
   private equipmentCache?: EquipmentRecord[];
   private resourceCategoriesCache?: Map<number, ResourceCategoryInfo>;
   private bookingCategoriesCache?: BookingCategoryRecord[];
+  private facilitiesCache?: CampgroundRecord[];
 
   constructor(
     opts: {
@@ -226,6 +230,112 @@ export class ParksCanadaProvider {
       this.bookingCategoriesCache = await this.client.listBookingCategories();
     }
     return this.bookingCategoriesCache;
+  }
+
+  /** Root map id for ANY facility (including backcountry/day-use, which aren't in
+   *  the site-filtered campground list). */
+  private async facilityRootMapId(rlid: string): Promise<number | string | null> {
+    if (!this.facilitiesCache) this.facilitiesCache = await this.client.listFacilities();
+    const f = this.facilitiesCache.find((x) => String(x.resourceLocationId) === String(rlid));
+    return f ? f.rootMapId : null;
+  }
+
+  /** Backcountry products (bookingModel 5), optionally narrowed by name/place. */
+  private async backcountryProducts(query?: string): Promise<BookingCategoryRecord[]> {
+    const products = (await this.bookingCategories()).filter((p) => p.bookingModel === 5);
+    const words = (query ?? "").toLowerCase().split(/\s+/).filter((w) => w.length >= 4);
+    if (words.length === 0) return products;
+    return products.filter((p) => {
+      const name = p.name.toLowerCase();
+      return words.some((w) => name.includes(w));
+    });
+  }
+
+  /** Browse the backcountry catalog — the areas/trips a citizen can pick. */
+  async listBackcountryProducts(query?: string): Promise<BackcountryProduct[]> {
+    return (await this.backcountryProducts(query))
+      .map((p) => ({
+        provider: PROVIDER_NAME,
+        recreationAreaId: PARKS_CANADA_REC_AREA_ID,
+        productId: String(p.bookingCategoryId),
+        product: p.name,
+        campgroundId: String(p.resourceLocationId),
+      }))
+      .sort((a, b) => a.product.localeCompare(b.product));
+  }
+
+  /**
+   * Search backcountry (model 5) zones for nights with room for the party. Each zone
+   * is one itinerary leg (one zone per night); availability is a per-night quota, so
+   * a night is "open" when the remaining count is at least the party size. A trip is
+   * composed from these zones via prepare_booking's itinerary. Accessibility, where
+   * the zone exposes it, is surfaced first-class (Constitution Art. 3).
+   */
+  async searchBackcountry(opts: {
+    query: string;
+    startDate: ISODate;
+    endDate: ISODate;
+    partySize?: number;
+    accessibleOnly?: boolean;
+  }): Promise<BackcountryZone[]> {
+    const need = Math.max(1, opts.partySize ?? 1);
+    const matched = await this.backcountryProducts(opts.query);
+    const window = windowNights(opts.startDate, opts.endDate);
+
+    const zones: BackcountryZone[] = [];
+    for (const product of matched) {
+      const rlid = String(product.resourceLocationId);
+      // Backcountry facilities aren't in the (site-filtered) campground list, so
+      // resolve their root map from the unfiltered facility list.
+      const rootMapId = await this.facilityRootMapId(rlid);
+      if (rootMapId == null) continue;
+      const resources = await this.client.getResources(rlid);
+      const daily = await this.client.dailyAvailability({
+        rootMapId,
+        resourceLocationId: rlid,
+        startDate: opts.startDate,
+        endDate: opts.endDate,
+        bookingCategoryId: product.bookingCategoryId,
+        equipmentCategoryId: BACKCOUNTRY_EQUIPMENT_CATEGORY,
+      });
+      for (const [zoneId, counts] of Object.entries(daily)) {
+        const resource = resources[zoneId];
+        if (!resource) continue;
+        // Backcountry availability is a remaining-quota count per night (not a
+        // status code): a night has room when at least the whole party fits.
+        const open: ISODate[] = [];
+        let minRemaining = Infinity;
+        window.forEach((night, i) => {
+          const q = counts[i];
+          if (q != null && q >= need) {
+            open.push(night);
+            minRemaining = Math.min(minRemaining, q);
+          }
+        });
+        if (open.length === 0) continue;
+        const accessible = resourceIsAccessible(resource);
+        if (opts.accessibleOnly && !accessible) continue;
+        zones.push({
+          provider: PROVIDER_NAME,
+          recreationAreaId: PARKS_CANADA_REC_AREA_ID,
+          productId: String(product.bookingCategoryId),
+          product: product.name,
+          campgroundId: rlid,
+          zoneId,
+          zoneName: resourceName(resource) ?? zoneId,
+          accessible,
+          openNights: open,
+          minRemaining: minRemaining === Infinity ? 0 : minRemaining,
+        });
+      }
+    }
+    zones.sort(
+      (a, b) =>
+        (a.accessible ? 0 : 1) - (b.accessible ? 0 : 1) ||
+        a.product.localeCompare(b.product) ||
+        compareSiteNames(a.zoneName, b.zoneName),
+    );
+    return zones;
   }
 
   async searchSites(opts: SearchSitesOptions): Promise<AvailableSite[]> {

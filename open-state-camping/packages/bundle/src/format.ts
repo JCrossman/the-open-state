@@ -14,6 +14,8 @@ import {
   weekdayLongName,
   weekdayName,
   type AvailableSite,
+  type BackcountryProduct,
+  type BackcountryZone,
   type CampgroundAvailability,
   type DayUseProduct,
   type DayUseSlot,
@@ -195,6 +197,77 @@ export function dayUseDatesProblem(start: string, end: string): string | null {
   return null;
 }
 
+export function formatBackcountryProducts(
+  products: BackcountryProduct[],
+  query?: string,
+): string {
+  if (products.length === 0) {
+    return query
+      ? `No backcountry area matched "${query}". Ask me to list all backcountry options.`
+      : "No backcountry areas were found.";
+  }
+  const lines = [
+    query
+      ? `Backcountry areas matching "${query}":`
+      : "Parks Canada backcountry areas you can book:",
+    "",
+  ];
+  for (const p of products) lines.push(`- ${p.product}`);
+  lines.push(
+    "",
+    "Tell me an area, your dates, and party size and I'll check which zones have room " +
+      "each night (e.g. \"Broken Group Islands for July 15-17, party of 2\"). A trip " +
+      "is built one zone per night.",
+  );
+  return lines.join("\n");
+}
+
+export function formatBackcountry(
+  query: string,
+  zones: BackcountryZone[],
+  opts: { stay: string; partySize: number; accessibleOnly: boolean },
+): string {
+  if (zones.length === 0) {
+    let msg = `No backcountry zones with room for a party of ${opts.partySize} were found for "${query}" over ${opts.stay}`;
+    msg += opts.accessibleOnly ? " (accessible zones only)." : ".";
+    return (
+      msg +
+      " Backcountry quotas are small and go fast — try other dates or a nearby area, " +
+      "or ask me to list backcountry options."
+    );
+  }
+  const accessibleCount = zones.filter((z) => z.accessible).length;
+  const byProduct = new Map<string, BackcountryZone[]>();
+  for (const z of zones) {
+    (byProduct.get(z.product) ?? byProduct.set(z.product, []).get(z.product)!).push(z);
+  }
+  const lines = [
+    `Backcountry zones with room for a party of ${opts.partySize} over ${opts.stay}` +
+      (opts.accessibleOnly ? " (accessible only)" : "") +
+      `. ${accessibleCount} of them are marked accessible. ${INDEPENDENCE_NOTE}`,
+  ];
+  for (const [product, zs] of byProduct) {
+    lines.push("", product + ":");
+    for (const z of zs) {
+      const nights =
+        z.openNights.length === 1
+          ? z.openNights[0]
+          : `${z.openNights[0]} … ${z.openNights[z.openNights.length - 1]} (${z.openNights.length} nights)`;
+      const acc = z.accessible ? "accessible" : "not marked accessible";
+      lines.push(
+        `  - ${z.zoneName} — ${acc}; room on ${nights}; ${z.minRemaining} spot(s) left  [internal id ${z.zoneId}]`,
+      );
+    }
+  }
+  lines.push(
+    "",
+    "A backcountry trip is one zone per night — tell me the zones and nights you want " +
+      "and I'll prepare the itinerary up to the payment screen for you to review and " +
+      "pay yourself. Don't show the citizen the internal ids.",
+  );
+  return lines.join("\n");
+}
+
 export function formatDayUseProducts(products: DayUseProduct[], query?: string): string {
   if (products.length === 0) {
     return query
@@ -255,6 +328,11 @@ export function formatDayUse(
   }
   lines.push(
     "",
+    // Honest accessibility note: Day Use slots don't expose an accessibility
+    // attribute the way campsites do, so we don't claim one. Point the citizen to
+    // the park rather than leave an accessibility need unanswered.
+    "Accessibility (accessible boarding, parking, or facilities) isn't listed per " +
+      "time here — contact the park to confirm what you need before you pay.",
     "Tell me which time you'd like and I'll prepare it — I take it to the payment " +
       "screen and you review and pay yourself. Don't show the citizen the internal ids.",
   );

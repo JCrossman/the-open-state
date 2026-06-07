@@ -40,7 +40,9 @@ function fixtureFetch(): FetchLike {
         data =
           u.searchParams.get("resourceLocationId") === "-2147483642"
             ? fixture("dayuse_resources.json")
-            : fixture("resources_min.json");
+            : u.searchParams.get("resourceLocationId") === "-2147480000"
+              ? fixture("bc_resources.json")
+              : fixture("resources_min.json");
         break;
       case "/api/bookingcategories":
         data = fixture("bookingcategories_min.json");
@@ -53,9 +55,11 @@ function fixtureFetch(): FetchLike {
         break;
       case "/api/availability/map":
         data =
-          u.searchParams.get("mapId") === ROOT_MAP_ID
-            ? fixture("availability_root.json")
-            : fixture("availability_child.json");
+          u.searchParams.get("mapId") === "-2147480001"
+            ? fixture("bc_availability.json")
+            : u.searchParams.get("mapId") === ROOT_MAP_ID
+              ? fixture("availability_root.json")
+              : fixture("availability_child.json");
         break;
       default:
         return new Response(JSON.stringify({ error: u.pathname }), { status: 404 });
@@ -124,6 +128,7 @@ describe("bundle MCP server", () => {
         "list_equipment_types",
         "prepare_booking_url",
         "resolve_dates",
+        "search_backcountry",
         "search_day_use",
         "search_park_availability",
         "search_parks",
@@ -163,6 +168,23 @@ describe("bundle MCP server", () => {
     });
     expect(out).toContain("Availability for");
     expect(out).toContain("campground id:");
+  });
+
+  it("search_backcountry surfaces zones with accessibility and quota", async () => {
+    const out = await callText(await connectClient(), "search_backcountry", {
+      query: "Broken Group",
+      start_date: "2026-07-15",
+      end_date: "2026-07-17",
+      party_size: 2,
+    });
+    expect(out).toContain("Hand Island");
+    expect(out).toContain("accessible");
+    expect(out).toMatch(/spot\(s\) left/);
+  });
+
+  it("search_backcountry with no query browses the backcountry catalog", async () => {
+    const out = await callText(await connectClient(), "search_backcountry", {});
+    expect(out).toContain("backcountry areas you can book");
   });
 
   it("search_day_use with no dates browses the Day Use product catalog", async () => {

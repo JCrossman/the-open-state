@@ -313,6 +313,57 @@ export function registerTools(
   );
 
   server.registerTool(
+    "search_backcountry",
+    {
+      title: "Search backcountry zones (wilderness permits)",
+      description:
+        "Backcountry = multi-night wilderness trips, booked one zone per night. " +
+        "Call with NO query to LIST the backcountry areas. Call with an area/place in " +
+        "`query` PLUS dates and party size to see which zones have room each night " +
+        "(with accessibility surfaced). A trip is then composed one zone per night. " +
+        "start_date/end_date span the nights; pass accessible_only to keep only " +
+        "accessible zones.",
+      inputSchema: {
+        query: z.string().optional(),
+        start_date: isoDate.optional(),
+        end_date: isoDate.optional(),
+        party_size: z.number().int().positive().optional(),
+        accessible_only: z.boolean().optional(),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async (args) => {
+      try {
+        if (!args.query || !args.start_date || !args.end_date) {
+          const products = await provider.listBackcountryProducts(args.query);
+          return text(fmt.formatBackcountryProducts(products, args.query));
+        }
+        const dateIssue = fmt.stayDatesProblem(args.start_date, args.end_date);
+        if (dateIssue) return text(dateIssue);
+        const zones = await provider.searchBackcountry({
+          query: args.query,
+          startDate: args.start_date,
+          endDate: args.end_date,
+          partySize: args.party_size,
+          accessibleOnly: args.accessible_only ?? false,
+        });
+        if (zones.length === 0 && (await provider.listBackcountryProducts(args.query)).length === 0) {
+          return text(fmt.formatBackcountryProducts(await provider.listBackcountryProducts(), args.query));
+        }
+        return text(
+          fmt.formatBackcountry(args.query, zones, {
+            stay: stay(args.start_date, args.end_date),
+            partySize: args.party_size ?? 1,
+            accessibleOnly: args.accessible_only ?? false,
+          }),
+        );
+      } catch (e) {
+        return text(fmt.problem(e));
+      }
+    },
+  );
+
+  server.registerTool(
     "get_site_details",
     {
       title: "Get campsite details",

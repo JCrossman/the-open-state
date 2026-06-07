@@ -17,6 +17,33 @@ export interface Campground {
   offers?: string[];
 }
 
+/** A backcountry product (a backcountry area/trip the citizen can choose). */
+export interface BackcountryProduct {
+  provider: string;
+  recreationAreaId: string;
+  productId: string;
+  product: string;
+  campgroundId: string;
+}
+
+/** A backcountry zone with its availability over the requested nights. */
+export interface BackcountryZone {
+  provider: string;
+  recreationAreaId: string;
+  productId: string;
+  product: string;
+  /** The facility (resourceLocationId), reused by the booking flow. */
+  campgroundId: string;
+  /** The zone resource (resourceId) — one itinerary leg books one zone per night. */
+  zoneId: string;
+  zoneName: string;
+  accessible: boolean;
+  /** Nights (YYYY-MM-DD) in the requested window with room for the whole party. */
+  openNights: ISODate[];
+  /** Smallest remaining quota across the open nights (the binding constraint). */
+  minRemaining: number;
+}
+
 /** A Day Use product the citizen can choose (one row of the Day Use tab). */
 export interface DayUseProduct {
   provider: string;

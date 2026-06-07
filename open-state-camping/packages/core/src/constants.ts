@@ -113,6 +113,8 @@ export function bookingGroupForCategory(
 
 // The non-group equipment category id used by availability and booking calls.
 export const NON_GROUP_EQUIPMENT = -32768;
+// Backcountry (model 5) availability/booking uses its own equipment category.
+export const BACKCOUNTRY_EQUIPMENT_CATEGORY = -32767;
 
 // Accessibility attribute: value 0 = Yes (accessible), 1 = No.
 export const ACCESSIBLE_ATTR = -32756;

@@ -44,7 +44,9 @@ function fixtureFetch(): FetchLike {
         data =
           u.searchParams.get("resourceLocationId") === "-2147483642"
             ? fixture("dayuse_resources.json")
-            : fixture("resources_min.json");
+            : u.searchParams.get("resourceLocationId") === "-2147480000"
+              ? fixture("bc_resources.json")
+              : fixture("resources_min.json");
         break;
       case "/api/bookingcategories":
         data = fixture("bookingcategories_min.json");
@@ -57,9 +59,11 @@ function fixtureFetch(): FetchLike {
         break;
       case "/api/availability/map":
         data =
-          u.searchParams.get("mapId") === ROOT_MAP_ID
-            ? fixture("availability_root.json")
-            : fixture("availability_child.json");
+          u.searchParams.get("mapId") === "-2147480001"
+            ? fixture("bc_availability.json")
+            : u.searchParams.get("mapId") === ROOT_MAP_ID
+              ? fixture("availability_root.json")
+              : fixture("availability_child.json");
         break;
       default:
         return new Response(JSON.stringify({ error: `unexpected ${path}` }), {
@@ -235,6 +239,56 @@ describe("ParksCanadaProvider — Day Use (model 1)", () => {
     expect(moraine).toHaveLength(1);
     expect(moraine[0]!.productId).toBe("9");
     expect(moraine[0]!.campgroundId).toBe("-2147483642");
+  });
+});
+
+describe("ParksCanadaProvider — Backcountry (model 5)", () => {
+  it("browses the backcountry catalog (model 5 only)", async () => {
+    const all = await makeProvider().listBackcountryProducts();
+    expect(all.map((p) => p.product)).toContain("Broken Group Islands Backcountry");
+    expect(all.every((p) => p.productId === "5")).toBe(true);
+  });
+
+  it("returns zones with room for the party, accessibility surfaced", async () => {
+    const zones = await makeProvider().searchBackcountry({
+      query: "Broken Group",
+      startDate: "2026-07-15",
+      endDate: "2026-07-17", // two nights
+      partySize: 2,
+    });
+    // Hand Island has 5/night (fits 2); Turret has 1 then 0 (never fits 2) → dropped.
+    expect(zones).toHaveLength(1);
+    expect(zones[0]!.zoneName).toBe("Hand Island");
+    expect(zones[0]!.accessible).toBe(true);
+    expect(zones[0]!.openNights).toEqual(["2026-07-15", "2026-07-16"]);
+    expect(zones[0]!.minRemaining).toBe(5);
+    expect(zones[0]!.campgroundId).toBe("-2147480000"); // facility, for booking reuse
+  });
+
+  it("treats the per-night quota as the constraint (party of 1 sees more)", async () => {
+    const zones = await makeProvider().searchBackcountry({
+      query: "Broken Group",
+      startDate: "2026-07-15",
+      endDate: "2026-07-17",
+      partySize: 1,
+    });
+    const names = zones.map((z) => z.zoneName).sort();
+    expect(names).toEqual(["Hand Island", "Turret Island"]); // Turret fits 1 on night 1
+    expect(zones.find((z) => z.zoneName === "Turret Island")!.openNights).toEqual([
+      "2026-07-15",
+    ]);
+  });
+
+  it("accessible_only keeps only accessible zones", async () => {
+    const zones = await makeProvider().searchBackcountry({
+      query: "Broken Group",
+      startDate: "2026-07-15",
+      endDate: "2026-07-17",
+      partySize: 1,
+      accessibleOnly: true,
+    });
+    expect(zones.every((z) => z.accessible)).toBe(true);
+    expect(zones.map((z) => z.zoneName)).toEqual(["Hand Island"]);
   });
 });
 

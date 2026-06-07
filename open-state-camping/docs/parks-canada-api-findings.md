@@ -282,12 +282,22 @@ Islands two-night trip; our generated cart is a key-for-key match). The model-5 
   carries `completedDate`/`blockerTransactionStatus` — now added for *all* models, to
   match the captures exactly.
 
-**Search not built yet.** Backcountry availability is **cart-context** — `GET
-/api/availability/map` / `resourcedailyavailability` are called with `isReserving:true`
-and a real `cartUid`/`cartTransactionUid`/`bookingUid` plus equipment + party, returning
-per-zone per-day `availability` (0/1). So a backcountry search must spin up a reserving
-cart first; that plus itinerary planning (chaining zones via `/api/reachableresources`)
-is the remaining work and the genuinely hard part of model 5.
+**Search is built.** Despite the captured flow always carrying a cart, backcountry
+zone availability works **cart-free** via the same `GET /api/availability/map`
+(walked recursively) with `bookingCategoryId` = the model-5 product and
+`equipmentCategoryId` `-32767` — verified live (Broken Group Islands returned 7 zones
+with `availability: 5`). Here `availability` is a **remaining-quota count per night**,
+not a status code, so a night has room when the count ≥ party size. `searchBackcountry`
+matches model-5 products by query (browse with no query), walks each facility's zones,
+and surfaces accessibility first-class (`accessible_only` filter). Backcountry
+facilities aren't in the site-filtered campground list, so root maps resolve via an
+unfiltered `listFacilities()`.
+
+Remaining for model 5: wire `prepare_booking` to take the multi-leg itinerary (the
+cart engine is built and HAR-matched), resolve the backcountry equipment
+(`subEquipmentCategoryId`, e.g. `-32758` in the capture), then a fee-free confirm
+test. Per Constitution Art. 2.4 (contested, time-limited resources) we keep this
+**prepare-on-demand only** — no auto-prepare/snipe at permit-release moments.
 
 ## Divergences from camply (camply 0.34.2 is stale for this host)
 

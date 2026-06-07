@@ -42,5 +42,16 @@
         "name": "Campsite"
       }
     ]
+  },
+  {
+    "bookingCategoryId": 5,
+    "bookingModel": 5,
+    "resourceLocationId": -2147480000,
+    "localizedValues": [
+      {
+        "cultureName": "en-CA",
+        "name": "Broken Group Islands Backcountry"
+      }
+    ]
   }
 ]

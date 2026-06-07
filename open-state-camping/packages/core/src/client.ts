@@ -184,23 +184,26 @@ export class GoingToCampClient {
 
   // -- endpoints ------------------------------------------------------------
 
-  /** Reservable campgrounds: id, name, and root map id. */
-  async listCampgrounds(): Promise<CampgroundRecord[]> {
+  /** Every facility (resourceLocation), unfiltered — campgrounds, backcountry,
+   *  day-use, all of it. Backcountry/day-use facilities aren't "campgrounds" but
+   *  still need their `rootMapId` resolved for availability. */
+  async listFacilities(): Promise<CampgroundRecord[]> {
     const data = (await this.get("/api/resourceLocation")) as
       | Array<Record<string, any>>
       | null;
-    const out: CampgroundRecord[] = [];
-    for (const facility of data ?? []) {
-      const categories: number[] = facility["resourceCategoryIds"] ?? [];
-      if (!categories.some((c) => ALL_SITE_CATEGORIES.has(c))) continue;
-      out.push({
-        resourceLocationId: facility["resourceLocationId"],
-        name: (localized(facility["localizedValues"], "fullName") as string) ?? "",
-        rootMapId: facility["rootMapId"],
-        offeredCategoryIds: categories,
-      });
-    }
-    return out;
+    return (data ?? []).map((facility) => ({
+      resourceLocationId: facility["resourceLocationId"],
+      name: (localized(facility["localizedValues"], "fullName") as string) ?? "",
+      rootMapId: facility["rootMapId"],
+      offeredCategoryIds: facility["resourceCategoryIds"] ?? [],
+    }));
+  }
+
+  /** Reservable campgrounds: the facilities that offer a model-0 site category. */
+  async listCampgrounds(): Promise<CampgroundRecord[]> {
+    return (await this.listFacilities()).filter((f) =>
+      f.offeredCategoryIds.some((c) => ALL_SITE_CATEGORIES.has(c)),
+    );
   }
 
   /** Resource categories: `resourceCategoryId` → name + `resourceType` (Campsite,
@@ -447,6 +450,7 @@ export class GoingToCampClient {
     endDate: ISODate;
     equipmentId?: number | null;
     bookingCategoryId?: number;
+    equipmentCategoryId?: number;
   }): Promise<DailyAvailability> {
     const result: DailyAvailability = {};
     const visited = new Set<string>();
@@ -469,6 +473,7 @@ export class GoingToCampClient {
           opts.endDate,
           opts.equipmentId ?? null,
           opts.bookingCategoryId ?? 0,
+          opts.equipmentCategoryId ?? NON_GROUP_EQUIPMENT,
         ),
       )) as Record<string, any>;
 
@@ -537,12 +542,13 @@ function availabilityParams(
   endDate: ISODate,
   equipmentId: number | null,
   bookingCategoryId: number,
+  equipmentCategoryId: number,
 ): Record<string, unknown> {
   const params: Record<string, unknown> = {
     mapId,
     resourceLocationId,
     bookingCategoryId,
-    equipmentCategoryId: NON_GROUP_EQUIPMENT,
+    equipmentCategoryId,
     startDate,
     endDate,
     getDailyAvailability: "true",
