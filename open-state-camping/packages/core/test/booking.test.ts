@@ -246,6 +246,50 @@ describe("booking cart assembly — Day Use (model 1)", () => {
   });
 });
 
+describe("booking cart assembly — Backcountry (model 5)", () => {
+  // Mirrors the captured Pacific Rim - Broken Group Islands two-night itinerary.
+  const bcReq: BookingRequest = {
+    resourceId: -2147483547,
+    resourceLocationId: -2147483598,
+    startDate: "2026-06-13",
+    endDate: "2026-06-15",
+    party: { adults: 2 },
+    bookingCategoryId: 5,
+    bookingModel: 5,
+    subEquipmentCategoryId: -32758,
+    itinerary: [
+      { resourceId: -2147483547, startDate: "2026-06-13", endDate: "2026-06-14" },
+      { resourceId: -2147483541, startDate: "2026-06-14", endDate: "2026-06-15" },
+    ],
+  };
+
+  it("turns each itinerary leg into its own resource blocker", () => {
+    const { cart } = buildBookingCart(baseCart(), bcReq, ids, envelope, "finalize");
+    expect(cart.resourceBlockers).toHaveLength(2);
+    expect(cart.resourceBlockers.map((b: any) => b.newVersion.resourceId)).toEqual([
+      -2147483547, -2147483541,
+    ]);
+    expect(cart.resourceBlockers.map((b: any) => b.newVersion.startDate)).toEqual([
+      "2026-06-13",
+      "2026-06-14",
+    ]);
+    const nv = cart.bookings[0].newVersion;
+    expect(nv.resourceBlockerUids).toHaveLength(2);
+    expect(nv.resourceBlockerUids).toEqual(cart.resourceBlockers.map((b: any) => b.resourceBlockerUid));
+  });
+
+  it("spans the whole itinerary with backcountry model, times, and equipment", () => {
+    const { cart } = buildBookingCart(baseCart(), bcReq, ids, envelope, "finalize");
+    const booking = cart.bookings[0];
+    expect(booking.bookingModel).toBe(5);
+    expect(booking.newVersion.startDate).toBe("2026-06-13");
+    expect(booking.newVersion.endDate).toBe("2026-06-15"); // last leg's end
+    expect(booking.newVersion.checkInTime).toBe("12:00");
+    expect(booking.newVersion.checkOutTime).toBe("11:00");
+    expect(booking.newVersion.equipmentCategoryId).toBe(-32767); // backcountry equipment
+  });
+});
+
 describe("booking cart assembly — uses the server transaction", () => {
   it("threads the server-issued cartTransactionUid into the booking, not a client guess", () => {
     const base = baseCart();

@@ -24,9 +24,13 @@ const DEFAULT_CHECK_OUT_TIME = "11:00";
 /** Day Use (model 1) covers the whole open day, not an overnight window. */
 const DAY_USE_CHECK_IN_TIME = "10:00";
 const DAY_USE_CHECK_OUT_TIME = "23:59";
+/** Backcountry (model 5) check-in/out and its own equipment category. */
+const BACKCOUNTRY_CHECK_IN_TIME = "12:00";
+const BACKCOUNTRY_CHECK_OUT_TIME = "11:00";
+const BACKCOUNTRY_EQUIPMENT = -32767;
 
 /** Booking models that share this cart machinery (verified live / from HAR). */
-export const BOOKING_MODEL = { site: 0, dayUse: 1 } as const;
+export const BOOKING_MODEL = { site: 0, dayUse: 1, backcountry: 5 } as const;
 
 /** Party capacity sub-categories (verified): the four age bands the wizard shows. */
 export const CAPACITY_CATEGORY_ID = -32767;
@@ -61,8 +65,14 @@ export interface BookingRequest {
   checkOutTime?: string;
   /** Booking category for the commit: 0 campsite (default), 1 accommodation, 2 group. */
   bookingCategoryId?: number;
-  /** Booking model: 0 = site/nights (default), 1 = Day Use time-slot. */
+  /** Booking model: 0 = site/nights (default), 1 = Day Use time-slot, 5 = Backcountry. */
   bookingModel?: number;
+  /**
+   * Backcountry (model 5) itinerary: one leg per night (a zone for a date range).
+   * When set, the booking spans every leg and each leg becomes a resource blocker;
+   * `resourceId`/`startDate`/`endDate` on the request are ignored in favour of the legs.
+   */
+  itinerary?: Array<{ resourceId: number; startDate: ISODate; endDate: ISODate }>;
 }
 
 /**
@@ -206,34 +216,46 @@ export function minimalOccupant(envelope: ShopperEnvelope): Record<string, any> 
 export type BookingStage = "hold" | "details" | "finalize";
 export const BOOKING_STAGES: readonly BookingStage[] = ["hold", "details", "finalize"];
 
+/** One itinerary leg: a resource (site or backcountry zone) held for a date range. */
+interface BlockerLeg {
+  uid: string;
+  resourceId: number;
+  startDate: ISODate;
+  endDate: ISODate;
+}
+
 /** Identify the booking within a specific server-issued transaction. */
 interface BookingRefs {
   bookingUid: string;
   cartUid: string;
   cartTransactionUid: string;
-  resourceBlockerUid: string;
+  /** One per leg: a single site for model 0, one per night/zone for model 5. */
+  legs: BlockerLeg[];
   resourceZoneBlockerUid: string;
 }
 
-/** The site hold (resource blocker) for the chosen site and dates. */
+/** A site/zone hold (resource blocker) for one leg and its date range. */
 export function buildResourceBlocker(
-  request: BookingRequest,
+  leg: BlockerLeg,
+  resourceLocationId: number,
   refs: BookingRefs,
 ): Record<string, any> {
   return {
     blockerType: 0,
     cartUid: refs.cartUid,
-    resourceBlockerUid: refs.resourceBlockerUid,
+    resourceBlockerUid: leg.uid,
     bookingUid: refs.bookingUid,
     groupHoldUid: "",
     isReservation: true,
     newVersion: {
       creationDate: new Date().toISOString(),
       cartTransactionUid: refs.cartTransactionUid,
-      startDate: request.startDate,
-      endDate: request.endDate,
-      resourceId: request.resourceId,
-      resourceLocationId: request.resourceLocationId,
+      completedDate: null,
+      blockerTransactionStatus: 0,
+      startDate: leg.startDate,
+      endDate: leg.endDate,
+      resourceId: leg.resourceId,
+      resourceLocationId,
       status: 0,
     },
   };
@@ -282,17 +304,33 @@ export function buildBooking(
   stage: BookingStage,
 ): Record<string, any> {
   const isHold = stage === "hold";
-  const isDayUse = (request.bookingModel ?? BOOKING_MODEL.site) === BOOKING_MODEL.dayUse;
-  // Day Use carries no equipment and holds the slot via a zone blocker; overnight
-  // sites carry equipment and a resource blocker.
+  const model = request.bookingModel ?? BOOKING_MODEL.site;
+  const isDayUse = model === BOOKING_MODEL.dayUse;
+  const isBackcountry = model === BOOKING_MODEL.backcountry;
+  // Equipment: Day Use carries none; backcountry uses its own category; frontcountry
+  // sites default to the non-group equipment category.
   const equipmentCategoryId = isDayUse
     ? null
-    : (request.equipmentCategoryId ?? NON_GROUP_EQUIPMENT);
+    : (request.equipmentCategoryId ?? (isBackcountry ? BACKCOUNTRY_EQUIPMENT : NON_GROUP_EQUIPMENT));
   const subEquipmentCategoryId = isDayUse
     ? null
     : (request.subEquipmentCategoryId ?? NON_GROUP_EQUIPMENT);
-  const checkIn = isDayUse ? DAY_USE_CHECK_IN_TIME : DEFAULT_CHECK_IN_TIME;
-  const checkOut = isDayUse ? DAY_USE_CHECK_OUT_TIME : DEFAULT_CHECK_OUT_TIME;
+  const checkIn = isDayUse
+    ? DAY_USE_CHECK_IN_TIME
+    : isBackcountry
+      ? BACKCOUNTRY_CHECK_IN_TIME
+      : DEFAULT_CHECK_IN_TIME;
+  const checkOut = isDayUse
+    ? DAY_USE_CHECK_OUT_TIME
+    : isBackcountry
+      ? BACKCOUNTRY_CHECK_OUT_TIME
+      : DEFAULT_CHECK_OUT_TIME;
+  // The booking spans every leg (model 5 has several; models 0/1 have one).
+  const startDate = refs.legs[0]?.startDate ?? request.startDate;
+  const endDate = refs.legs[refs.legs.length - 1]?.endDate ?? request.endDate;
+  // Backcountry sends its full-day check-in/out at every stage, like Day Use; an
+  // overnight site takes them from the resource model only after the hold.
+  const fixedTimes = isDayUse || isBackcountry;
   const newVersion: Record<string, any> = {
     cartTransactionUid: refs.cartTransactionUid,
     bookingMembers: stage === "finalize" ? [bookingHolderMember(envelope)] : [],
@@ -300,12 +338,12 @@ export function buildBooking(
     bookingBoats: [],
     bookingCapacityCategoryCounts: partyCapacityCounts(request.party),
     rateCategoryId: request.rateCategoryId ?? DEFAULT_RATE_CATEGORY_ID,
-    resourceBlockerUids: isDayUse ? [] : [refs.resourceBlockerUid],
+    resourceBlockerUids: isDayUse ? [] : refs.legs.map((l) => l.uid),
     resourceNonSpecificBlockerUids: [],
     resourceZoneBlockerUids: isDayUse ? [refs.resourceZoneBlockerUid] : [],
     resourceZoneEntryBlockerUids: [],
-    startDate: request.startDate,
-    endDate: request.endDate,
+    startDate,
+    endDate,
     releasePersonalInformation: false,
     equipmentCategoryId,
     subEquipmentCategoryId,
@@ -324,10 +362,8 @@ export function buildBooking(
     passExpiryDate: null,
     passNumber: "",
     resourceLocationId: request.resourceLocationId,
-    // Day Use times are fixed (full open day) and sent at every stage; overnight
-    // sites take them from the resource model and only after the hold.
-    checkInTime: isDayUse ? checkIn : isHold ? null : (request.checkInTime ?? checkIn),
-    checkOutTime: isDayUse ? checkOut : isHold ? null : (request.checkOutTime ?? checkOut),
+    checkInTime: fixedTimes ? checkIn : isHold ? null : (request.checkInTime ?? checkIn),
+    checkOutTime: fixedTimes ? checkOut : isHold ? null : (request.checkOutTime ?? checkOut),
     deferredPayment: false,
   };
   return {
@@ -372,20 +408,38 @@ export function buildBookingCart(
   cart["shopperUid"] = envelope.shopperUid;
   if (cart["newTransaction"]) cart["newTransaction"]["shopperUid"] = envelope.shopperUid;
 
+  const model = request.bookingModel ?? BOOKING_MODEL.site;
+  // One leg per resource blocker: model 5 has several (a zone per night, from the
+  // itinerary); models 0/1 have one (the single site/slot). Each leg's hold UID is
+  // the client-minted resourceBlockerUid for the first, then fresh GUIDs.
+  const legSpecs =
+    request.itinerary && request.itinerary.length > 0
+      ? request.itinerary
+      : [{ resourceId: request.resourceId, startDate: request.startDate, endDate: request.endDate }];
+  const legs: BlockerLeg[] = legSpecs.map((l, i) => ({
+    uid: i === 0 ? ids.resourceBlockerUid : randomUUID(),
+    resourceId: l.resourceId,
+    startDate: l.startDate,
+    endDate: l.endDate,
+  }));
+
   const refs: BookingRefs = {
     bookingUid: ids.bookingUid,
     cartUid,
     cartTransactionUid,
-    resourceBlockerUid: ids.resourceBlockerUid,
+    legs,
     resourceZoneBlockerUid: ids.resourceZoneBlockerUid,
   };
   cart["bookings"] = [buildBooking(request, refs, envelope, stage)];
-  // Day Use holds the slot in resourceZoneBlockers; overnight sites in resourceBlockers.
-  if ((request.bookingModel ?? BOOKING_MODEL.site) === BOOKING_MODEL.dayUse) {
+  // Day Use holds the slot in resourceZoneBlockers; site & backcountry bookings hold
+  // each leg in resourceBlockers (one for a site, several across a backcountry trip).
+  if (model === BOOKING_MODEL.dayUse) {
     cart["resourceZoneBlockers"] = [buildResourceZoneBlocker(request, refs)];
     cart["resourceBlockers"] = [];
   } else {
-    cart["resourceBlockers"] = [buildResourceBlocker(request, refs)];
+    cart["resourceBlockers"] = legs.map((leg) =>
+      buildResourceBlocker(leg, request.resourceLocationId, refs),
+    );
   }
   return { cart };
 }

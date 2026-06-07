@@ -271,9 +271,23 @@ zones reachable next). Availability is per-zone per-night quota
 collection** (`partyMember{Name,Age,Contact,Date,CapacityCategory,Note}
 CollectionRequirement`).
 
-Not built. This is the largest model: itinerary builder + per-member roster + trip
-validation. Needs a HAR covering browse → itinerary build → payment to nail the cart
-shape (the `resourceZone*Blocker` / itinerary item / bookingMembers structure).
+**Booking cart is built and verified** (from a captured Pacific Rim - Broken Group
+Islands two-night trip; our generated cart is a key-for-key match). The model-5 cart:
+- `bookingModel 5`, `bookingCategoryId` 5/7/17; `checkInTime "12:00"`,
+  `checkOutTime "11:00"`; backcountry equipment category (`-32767`, not `-32768`).
+- The **itinerary is N `resourceBlockers`** — one per night, each a zone held for one
+  day (`resourceId` + start/end), referenced by the booking's `resourceBlockerUids`;
+  the booking spans first-leg start → last-leg end. (`buildBookingCart` takes an
+  `itinerary: [{resourceId,startDate,endDate}]`; legs become blockers.) Each blocker
+  carries `completedDate`/`blockerTransactionStatus` — now added for *all* models, to
+  match the captures exactly.
+
+**Search not built yet.** Backcountry availability is **cart-context** — `GET
+/api/availability/map` / `resourcedailyavailability` are called with `isReserving:true`
+and a real `cartUid`/`cartTransactionUid`/`bookingUid` plus equipment + party, returning
+per-zone per-day `availability` (0/1). So a backcountry search must spin up a reserving
+cart first; that plus itinerary planning (chaining zones via `/api/reachableresources`)
+is the remaining work and the genuinely hard part of model 5.
 
 ## Divergences from camply (camply 0.34.2 is stale for this host)
 
