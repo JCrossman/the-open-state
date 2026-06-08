@@ -268,8 +268,12 @@ to the capture):
   UID is client-generated. Same staged `POST /api/cart/commit` (isCompleted=false),
   stopping before payment.
 
-Day Use booking is wired into `prepare_booking` (pass `product_id`); **not yet
-confirmed against a live session** — needs one fee-free drive-to-payment test.
+Day Use booking is wired into `prepare_booking` (pass `product_id`); **confirmed
+live** — a Moraine Lake shuttle slot was driven to the payment screen against a real
+signed-in session (2026-06-08, no payment). Search→book works end-to-end. (Two bugs
+fixed en route: the catalog has no `resourceLocationId` so facilities resolve via
+`allowedResourceCategoryIds` and the search surfaces the numeric booking ids; and the
+browse-mode routing no longer loops when `end_date` is omitted for a single day.)
 
 ## Backcountry (model 5) — read-only recon
 
