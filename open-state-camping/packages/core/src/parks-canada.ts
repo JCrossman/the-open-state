@@ -386,12 +386,12 @@ export class ParksCanadaProvider {
       .map((r: any) => ({ id: String(r["resourceId"]), name: resourceName(r) ?? String(r["resourceId"]) }));
   }
 
-  /** A zone's own capacity category (from `zoneCapacitySettings`), needed for the extra
-   *  capacity-count entry a zone-permit cart carries. */
-  async zoneCapacityCategory(campgroundId: string, zoneId: string): Promise<number | undefined> {
-    const resources = await this.client.getResources(campgroundId);
-    const z = resources[String(zoneId)] as any;
-    return z?.["zoneCapacitySettings"]?.["capacityCategoryId"];
+  /** The capacity category for a zone-permit's extra capacity count — the *product's*
+   *  `additionalCapacityCategoryId` (constant per product), NOT the zone's own
+   *  `zoneCapacitySettings` (which varies per zone and was the wrong source). */
+  async backcountryCapacityCategory(productId: number): Promise<number | undefined> {
+    const p = (await this.bookingCategories()).find((c) => c.bookingCategoryId === productId);
+    return p?.additionalCapacityCategoryId;
   }
 
   /** The equipment a backcountry zone expects (from its `allowedEquipment`). The

@@ -126,6 +126,13 @@ describe("ParksCanadaProvider — search", () => {
     ]);
   });
 
+  it("resolves a zone permit's capacity category from the PRODUCT, not the zone", async () => {
+    // Regression: the 5th capacity count must use the product's additionalCapacity
+    // CategoryId (constant), not the zone's zoneCapacitySettings (varies per zone) —
+    // the wrong source produced -32767 for Lean-to Les Lacs and an InvalidCart.
+    expect(await makeProvider().backcountryCapacityCategory(5)).toBe(-32766);
+  });
+
   it("reports a single campground's offerings by id", async () => {
     expect(await makeProvider().campgroundOfferings(CAMPGROUND_ID)).toEqual([
       "Frontcountry Camping",

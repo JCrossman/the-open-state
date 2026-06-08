@@ -341,7 +341,7 @@ routes the hold accordingly:
     `InvalidCart`). Only `{blockerType, cartUid, resourceZoneBlockerUid, bookingUid,
     groupHoldUid, isReservation, newVersion}` remain.
   - `checkInTime`/`checkOutTime` = **null**; **no equipment**; and an **extra capacity
-    count** keyed by the zone's own `zoneCapacitySettings.capacityCategoryId`
+    count** keyed by the **product's** `additionalCapacityCategoryId` (constant per product; the zone's own `zoneCapacitySettings.capacityCategoryId` varies per zone and was the wrong source — it produced -32767 for Lean-to Les Lacs and an InvalidCart)
     (`{capacityCategoryId, subCapacityCategoryId: null, count: party}`), with `isAdult`
     flags on the four age-band entries.
 

@@ -273,9 +273,8 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
               entries.map((e) => `  - ${e.name}  [entry_point_id=${e.id}]`).join("\n"),
           );
         }
-        zoneCapacityCategoryId = await provider.zoneCapacityCategory(
-          args.campground_id,
-          itinerary[0]!.zone_id,
+        zoneCapacityCategoryId = await provider.backcountryCapacityCategory(
+          Number(args.product_id),
         );
       }
 

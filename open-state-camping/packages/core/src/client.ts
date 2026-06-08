@@ -49,6 +49,9 @@ export interface BookingCategoryRecord {
   /** Resource categories this product covers; facilities offering any of them are
    *  this product's facilities (the catalog carries no resourceLocationId). */
   allowedResourceCategoryIds: number[];
+  /** The product's extra capacity category — the zone-permit cart's 5th capacity count
+   *  is keyed by this (NOT the zone's own zoneCapacitySettings). */
+  additionalCapacityCategoryId?: number;
   name: string;
 }
 
@@ -252,6 +255,7 @@ export class GoingToCampClient {
         bookingCategoryId: id,
         bookingModel: c["bookingModel"],
         allowedResourceCategoryIds: c["allowedResourceCategoryIds"] ?? [],
+        additionalCapacityCategoryId: c["additionalCapacityCategoryId"] ?? undefined,
         name: (localized(c["localizedValues"], "name") as string) ?? "",
       });
     }
