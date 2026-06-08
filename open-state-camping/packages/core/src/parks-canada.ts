@@ -300,7 +300,6 @@ export class ParksCanadaProvider {
     partySize?: number;
     accessibleOnly?: boolean;
   }): Promise<BackcountryZone[]> {
-    const need = Math.max(1, opts.partySize ?? 1);
     const pairs = await this.productFacilityPairs(5, opts.query);
     const window = windowNights(opts.startDate, opts.endDate);
 
@@ -335,15 +334,10 @@ export class ParksCanadaProvider {
         // bookable zones — entry points (resourceModel 3 AccessPoint) are not campable.
         if (!cats.has(resource["resourceCategoryId"])) continue;
         if (resource["resourceModel"] === 3) continue;
-        const open: ISODate[] = [];
-        let minRemaining = Infinity;
-        window.forEach((night, i) => {
-          const q = counts[i];
-          if (q != null && q >= need) {
-            open.push(night);
-            minRemaining = Math.min(minRemaining, q);
-          }
-        });
+        // Backcountry availability is a STATUS code, not a quota count: 0 = available
+        // for that night (like frontcountry), non-zero = not available. (Verified live:
+        // a full zone returns 1/5, an open zone returns 0.)
+        const open: ISODate[] = window.filter((_n, i) => counts[i] === 0);
         if (open.length === 0) continue;
         const accessible = resourceIsAccessible(resource);
         if (opts.accessibleOnly && !accessible) continue;
@@ -357,7 +351,6 @@ export class ParksCanadaProvider {
           zoneName: resourceName(resource) ?? zoneId,
           accessible,
           openNights: open,
-          minRemaining: minRemaining === Infinity ? 0 : minRemaining,
         });
       }
     }

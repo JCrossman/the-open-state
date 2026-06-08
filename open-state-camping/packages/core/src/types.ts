@@ -38,10 +38,9 @@ export interface BackcountryZone {
   zoneId: string;
   zoneName: string;
   accessible: boolean;
-  /** Nights (YYYY-MM-DD) in the requested window with room for the whole party. */
+  /** Nights (YYYY-MM-DD) in the requested window that are available for this zone.
+   *  (Backcountry availability is a status, not a count, so there's no spot tally.) */
   openNights: ISODate[];
-  /** Smallest remaining quota across the open nights (the binding constraint). */
-  minRemaining: number;
 }
 
 /** A Day Use product the citizen can choose (one row of the Day Use tab). */

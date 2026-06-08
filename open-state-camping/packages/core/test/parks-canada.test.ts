@@ -251,34 +251,21 @@ describe("ParksCanadaProvider — Backcountry (model 5)", () => {
     expect(bg!.productId).toBe("5");
   });
 
-  it("returns zones with room for the party, accessibility surfaced", async () => {
+  it("reads availability as a status (0 = available, non-zero = full), per night", async () => {
     const zones = await makeProvider().searchBackcountry({
       query: "Broken Group",
       startDate: "2026-07-15",
       endDate: "2026-07-17", // two nights
-      partySize: 2,
-    });
-    // Hand Island has 5/night (fits 2); Turret has 1 then 0 (never fits 2) → dropped.
-    expect(zones).toHaveLength(1);
-    expect(zones[0]!.zoneName).toBe("Hand Island");
-    expect(zones[0]!.accessible).toBe(true);
-    expect(zones[0]!.openNights).toEqual(["2026-07-15", "2026-07-16"]);
-    expect(zones[0]!.minRemaining).toBe(5);
-    expect(zones[0]!.campgroundId).toBe("-2147480000"); // facility, for booking reuse
-  });
-
-  it("treats the per-night quota as the constraint (party of 1 sees more)", async () => {
-    const zones = await makeProvider().searchBackcountry({
-      query: "Broken Group",
-      startDate: "2026-07-15",
-      endDate: "2026-07-17",
       partySize: 1,
     });
-    const names = zones.map((z) => z.zoneName).sort();
-    expect(names).toEqual(["Hand Island", "Turret Island"]); // Turret fits 1 on night 1
-    expect(zones.find((z) => z.zoneName === "Turret Island")!.openNights).toEqual([
-      "2026-07-15",
-    ]);
+    // Fixture: Hand Island [0,0] = available both nights; Turret [0,5] = night 1 only.
+    const hand = zones.find((z) => z.zoneName === "Hand Island")!;
+    expect(hand.accessible).toBe(true);
+    expect(hand.openNights).toEqual(["2026-07-15", "2026-07-16"]);
+    expect(hand.campgroundId).toBe("-2147480000"); // facility, for booking reuse
+    // Non-inversion regression: night 2's status 5 must NOT be reported as available.
+    const turret = zones.find((z) => z.zoneName === "Turret Island")!;
+    expect(turret.openNights).toEqual(["2026-07-15"]);
   });
 
   it("accessible_only keeps only accessible zones", async () => {

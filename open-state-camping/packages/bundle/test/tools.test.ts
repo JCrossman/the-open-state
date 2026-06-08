@@ -170,16 +170,16 @@ describe("bundle MCP server", () => {
     expect(out).toContain("campground id:");
   });
 
-  it("search_backcountry surfaces zones with accessibility and quota", async () => {
+  it("search_backcountry surfaces available zones with accessibility + booking ids", async () => {
     const out = await callText(await connectClient(), "search_backcountry", {
       query: "Broken Group",
       start_date: "2026-07-15",
       end_date: "2026-07-17",
-      party_size: 2,
+      party_size: 1,
     });
     expect(out).toContain("Hand Island");
     expect(out).toContain("accessible");
-    expect(out).toMatch(/spot\(s\) left/);
+    expect(out).toMatch(/available on/);
     // The booking ids must be surfaced so prepare_booking gets numeric ids, not names.
     expect(out).toContain("campground_id=-2147480000");
     expect(out).toContain("product_id=5");

@@ -304,12 +304,15 @@ Islands two-night trip; our generated cart is a key-for-key match). The model-5 
   carries `completedDate`/`blockerTransactionStatus` — now added for *all* models, to
   match the captures exactly.
 
-**Search is built.** Despite the captured flow always carrying a cart, backcountry
-zone availability works **cart-free** via the same `GET /api/availability/map`
-(walked recursively) with `bookingCategoryId` = the model-5 product and
-`equipmentCategoryId` `-32767` — verified live (Broken Group Islands returned 7 zones
-with `availability: 5`). Here `availability` is a **remaining-quota count per night**,
-not a status code, so a night has room when the count ≥ party size. `searchBackcountry`
+**Search is built.** Backcountry zone availability works **cart-free** via the same
+`GET /api/availability/map` (walked recursively) with `bookingCategoryId` = the model-5
+product and `equipmentCategoryId` `-32767`. ⚠️ **`availability` is a STATUS code, not a
+quota count** — `0` = available that night (exactly like frontcountry's `openNights`),
+non-zero = not available. (An early reading of it as a count `≥ party` *inverted* the
+result — a full zone returns `1`/`5` and read as "1–5 spots", an open zone returns `0`
+and read as "no room", so search reported phantom availability *and* missed real
+availability. Verified live: Glacier Hermit Meadows full → `1`; Forillon's five open
+zones → `0`, matching the website exactly.) `searchBackcountry`
 matches model-5 products by query (browse with no query), walks each facility's zones,
 and surfaces accessibility first-class (`accessible_only` filter). Backcountry
 facilities aren't in the site-filtered campground list, so root maps resolve via an

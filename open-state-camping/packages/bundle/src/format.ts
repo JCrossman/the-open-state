@@ -257,7 +257,7 @@ export function formatBackcountry(
           : `${z.openNights[0]} … ${z.openNights[z.openNights.length - 1]} (${z.openNights.length} nights)`;
       const acc = z.accessible ? "accessible" : "not marked accessible";
       lines.push(
-        `  - ${z.zoneName} — ${acc}; room on ${nights}; ${z.minRemaining} spot(s) left  ` +
+        `  - ${z.zoneName} — ${acc}; available on ${nights}  ` +
           `[zone_id=${z.zoneId}; open nights: ${z.openNights.join(", ")}]`,
       );
     }
