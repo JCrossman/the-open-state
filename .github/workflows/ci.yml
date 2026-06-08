@@ -27,8 +27,11 @@ jobs:
       - uses: actions/checkout@v4
 
       # pnpm first, so setup-node's pnpm cache has a package manager to key on.
-      # Version comes from the repo's packageManager field (pnpm@10.33.0).
+      # The version comes from the workspace's packageManager field (pnpm@10.33.0);
+      # point the action at it explicitly since it lives in the subdir, not repo root.
       - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: open-state-camping/package.json
 
       - uses: actions/setup-node@v4
         with:
