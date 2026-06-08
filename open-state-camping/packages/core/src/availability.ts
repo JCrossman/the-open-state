@@ -1,5 +1,5 @@
 /**
- * Per-night stay evaluation, ported from the verified Python implementation.
+ * Per-night stay evaluation against the verified availability contract.
  * `availability == 0` means a night is open (docs/parks-canada-api-findings.md).
  */
 import type { ISODate } from "./types.js";
@@ -73,7 +73,7 @@ export function evaluateStay(
 
 /**
  * Compare site names so numeric names order numerically, then text alphabetically.
- * Mirrors the Python `_name_sort_key` tuple `(0, int)` < `(1, str)`.
+ * Sort key: numeric names before text, `(0, int)` < `(1, str)`.
  */
 export function compareSiteNames(a: string, b: string): number {
   const aNum = /^\d+$/.test(a);

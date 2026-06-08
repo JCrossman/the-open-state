@@ -1,6 +1,6 @@
 /**
  * Plain-language formatters for tool output — screen-reader friendly, no tables
- * or emoji (Constitution Art. 3). Ported from the Python `server.py` builders.
+ * or emoji (Constitution Art. 3).
  */
 import {
   InvalidInputError,

@@ -24,7 +24,7 @@ function fixture(name: string): unknown {
   return JSON.parse(readFileSync(fileURLToPath(url), "utf8"));
 }
 
-/** Route requests to recorded fixtures, mirroring the Python conftest handler. */
+/** Route requests to recorded fixtures, the same recorded fixtures the suite uses. */
 function fixtureFetch(): FetchLike {
   return (async (input: string | URL | Request) => {
     const u = new URL(typeof input === "string" ? input : input.toString());

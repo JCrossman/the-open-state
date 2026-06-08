@@ -6,25 +6,18 @@ node_modules/
 .mcpb-build/
 *.mcpb
 
-# Local encrypted session vault (never commit citizen session material)
+# Local encrypted session vault + alerts file (never commit citizen material)
 .open-state-camping/
 
-# Python / uv
-.venv/
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
-build/
+# Build output
 dist/
-*.egg-info/
-
-# Local SQLite alert store (M1) - never commit citizen-adjacent data
-*.db
-*.sqlite
-*.sqlite3
 
 # Live capture artifacts (HAR with session cookies / PII) - never commit
 docs/captures/
 *.har
+
+# Python artifacts (legacy)
+__pycache__/
+*.py[cod]
+*.db
+*.sqlite*

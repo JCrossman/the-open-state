@@ -14,6 +14,9 @@ import { configFromEnv } from "./config.js";
 import { registerTools } from "./tools.js";
 import { registerAccountTools } from "./account-tools.js";
 import { registerBookingTools } from "./booking-tools.js";
+import { registerAlertTools } from "./alert-tools.js";
+import { AlertStore } from "./alerts/store.js";
+import { startAlertPoller } from "./alerts/poller.js";
 import { loadSession, sessionAuthHeaders } from "./session/vault.js";
 
 import type { BundleConfig } from "./config.js";
@@ -91,6 +94,11 @@ export function createServer(): McpServer {
   const server = createServerForProvider(provider, config);
   registerAccountTools(server, provider);
   registerBookingTools(server, provider);
+  // Cancellation watches: tools + the in-session poller (local stdio, so it checks
+  // only while the assistant is connected).
+  const store = new AlertStore();
+  registerAlertTools(server, provider, config, store);
+  startAlertPoller(provider, config, store);
   return server;
 }
 
