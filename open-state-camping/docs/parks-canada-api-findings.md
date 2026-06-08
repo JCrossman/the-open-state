@@ -347,7 +347,8 @@ routes the hold accordingly:
 
 Same staged commits, stops before payment; prepare-on-demand only (Art. 2.4).
 
-The zone-permit cart is a **key-for-key structural match** to the captured Forillon zone
+**Backcountry zone booking confirmed live** (Forillon Lean-to Les Lacs driven to the
+payment screen, 2026-06-08) — the last booking family to land. The zone-permit cart is a **key-for-key structural match** to the captured Forillon zone
 booking (booking object, capacity counts, blockers). The one thing still unconfirmed is
 the live authenticated commit on a *different* park (the error progression
 `ResourceUnavailable` → `InvalidCart` → [fixed] tracked the hold-type then the
