@@ -66,6 +66,10 @@ export interface BookingRequest {
   bookingCategoryId?: number;
   /** Booking model: 0 = site/nights (default), 1 = Day Use time-slot, 5 = Backcountry. */
   bookingModel?: number;
+  /** Backcountry zone permit: the entry-point (trailhead) resource you start from. */
+  entryPointResourceId?: number;
+  /** Backcountry zone permit: the zone's own capacity category (adds a counts entry). */
+  zoneCapacityCategoryId?: number;
   /**
    * Backcountry (model 5) itinerary: one leg per night (a zone for a date range).
    * When set, the booking spans every leg and each leg becomes a resource blocker;
@@ -116,6 +120,28 @@ export function partyCapacityCounts(party: PartyCounts): Array<{
     { capacityCategoryId: CAPACITY_CATEGORY_ID, count: party.youth ?? 0, subCapacityCategoryId: CAPACITY_SUB.youth },
     { capacityCategoryId: CAPACITY_CATEGORY_ID, count: party.children ?? 0, subCapacityCategoryId: CAPACITY_SUB.child },
   ];
+}
+
+/**
+ * Capacity counts for a backcountry *zone* permit. The four age-band entries carry an
+ * `isAdult` flag, and a fifth entry totals the party under the zone's own capacity
+ * category (verified vs a captured Forillon zone booking). `count` on that fifth entry
+ * is the whole party; `subCapacityCategoryId` is null.
+ */
+export function zoneCapacityCounts(
+  party: PartyCounts,
+  zoneCapacityCategoryId?: number,
+): Array<Record<string, unknown>> {
+  const counts: Array<Record<string, unknown>> = [
+    { capacityCategoryId: CAPACITY_CATEGORY_ID, subCapacityCategoryId: CAPACITY_SUB.adult, count: party.adults, isAdult: true },
+    { capacityCategoryId: CAPACITY_CATEGORY_ID, subCapacityCategoryId: CAPACITY_SUB.senior, count: party.seniors ?? 0, isAdult: true },
+    { capacityCategoryId: CAPACITY_CATEGORY_ID, subCapacityCategoryId: CAPACITY_SUB.youth, count: party.youth ?? 0, isAdult: false },
+    { capacityCategoryId: CAPACITY_CATEGORY_ID, subCapacityCategoryId: CAPACITY_SUB.child, count: party.children ?? 0, isAdult: false },
+  ];
+  if (zoneCapacityCategoryId != null) {
+    counts.push({ capacityCategoryId: zoneCapacityCategoryId, subCapacityCategoryId: null, count: partySize(party) });
+  }
+  return counts;
 }
 
 /** Total heads in the party (used for plain-language summaries and validation). */
@@ -285,7 +311,24 @@ export function buildResourceZoneBlocker(
   resourceLocationId: number,
   unitsBlocked: number,
   refs: BookingRefs,
+  lean = false,
 ): Record<string, any> {
+  // Day Use zone blockers carry blockerTransactionStatus + completedDate; backcountry
+  // zone blockers omit them (verified vs the respective captures). `lean` = backcountry.
+  const newVersion: Record<string, any> = {
+    cartTransactionUid: refs.cartTransactionUid,
+    creationDate: new Date().toISOString(),
+    status: 0,
+    resourceLocationId,
+    resourceId: leg.resourceId,
+    startDate: leg.startDate,
+    endDate: leg.endDate,
+    unitsBlocked,
+  };
+  if (!lean) {
+    newVersion["blockerTransactionStatus"] = 0;
+    newVersion["completedDate"] = null;
+  }
   return {
     resourceZoneBlockerUid: leg.uid,
     bookingUid: refs.bookingUid,
@@ -293,18 +336,7 @@ export function buildResourceZoneBlocker(
     isReservation: true,
     currentVersion: null,
     history: [],
-    newVersion: {
-      cartTransactionUid: refs.cartTransactionUid,
-      blockerTransactionStatus: 0,
-      creationDate: new Date().toISOString(),
-      status: 0,
-      completedDate: null,
-      resourceLocationId,
-      resourceId: leg.resourceId,
-      startDate: leg.startDate,
-      endDate: leg.endDate,
-      unitsBlocked,
-    },
+    newVersion,
     drafts: [],
     cartUid: refs.cartUid,
     adminCartUid: null,
@@ -351,15 +383,22 @@ export function buildBooking(
   // start and last leg's end for an itinerary.
   const startDate = request.startDate;
   const endDate = request.endDate;
-  // Backcountry sends its full-day check-in/out at every stage, like Day Use; an
-  // overnight site takes them from the resource model only after the hold.
-  const fixedTimes = isDayUse || isBackcountry;
+  // A backcountry *zone* permit (quota zone with an entry trailhead) differs from a
+  // backcountry *campsite*: it sends null check-in/out, an entry point, and an extra
+  // capacity count keyed by the zone's own capacity category (verified vs a captured
+  // Forillon zone booking).
+  const isZonePermit = isBackcountry && request.entryPointResourceId != null;
+  // Backcountry campsites & Day Use send fixed check-in/out at every stage; zone
+  // permits send null; overnight sites take them from the resource model after the hold.
+  const fixedTimes = (isDayUse || isBackcountry) && !isZonePermit;
   const newVersion: Record<string, any> = {
     cartTransactionUid: refs.cartTransactionUid,
     bookingMembers: stage === "finalize" ? [bookingHolderMember(envelope)] : [],
     bookingVehicles: [],
     bookingBoats: [],
-    bookingCapacityCategoryCounts: partyCapacityCounts(request.party),
+    bookingCapacityCategoryCounts: isZonePermit
+      ? zoneCapacityCounts(request.party, request.zoneCapacityCategoryId)
+      : partyCapacityCounts(request.party),
     rateCategoryId: request.rateCategoryId ?? DEFAULT_RATE_CATEGORY_ID,
     resourceBlockerUids: refs.resourceBlockerUids,
     resourceNonSpecificBlockerUids: [],
@@ -375,7 +414,7 @@ export function buildBooking(
     bookingStatus: 0,
     completedDate: isHold ? new Date().toISOString() : null,
     arrivalComment: "",
-    entryPointResourceId: null,
+    entryPointResourceId: request.entryPointResourceId ?? null,
     exitPointResourceId: null,
     bookingSurcharges: [],
     consentToRelease: false,
@@ -385,8 +424,8 @@ export function buildBooking(
     passExpiryDate: null,
     passNumber: "",
     resourceLocationId: request.resourceLocationId,
-    checkInTime: fixedTimes ? checkIn : isHold ? null : (request.checkInTime ?? checkIn),
-    checkOutTime: fixedTimes ? checkOut : isHold ? null : (request.checkOutTime ?? checkOut),
+    checkInTime: isZonePermit ? null : fixedTimes ? checkIn : isHold ? null : (request.checkInTime ?? checkIn),
+    checkOutTime: isZonePermit ? null : fixedTimes ? checkOut : isHold ? null : (request.checkOutTime ?? checkOut),
     deferredPayment: false,
   };
   return {
@@ -473,7 +512,8 @@ export function buildBookingCart(
         : ((usedSiteUid = true), ids.resourceBlockerUid);
     const leg: BlockerLeg = { uid, resourceId: l.resourceId, startDate: l.startDate, endDate: l.endDate, resourceModel: l.resourceModel };
     if (isZone) {
-      resourceZoneBlockers.push(buildResourceZoneBlocker(leg, request.resourceLocationId, units, refs));
+      const lean = model === BOOKING_MODEL.backcountry; // backcountry omits txn fields
+      resourceZoneBlockers.push(buildResourceZoneBlocker(leg, request.resourceLocationId, units, refs, lean));
       refs.resourceZoneBlockerUids.push(uid);
     } else {
       resourceBlockers.push(buildResourceBlocker(leg, request.resourceLocationId, refs));

@@ -325,17 +325,26 @@ like Day Use). Using a site blocker on a quota zone is what the platform rejecte
 routes the hold accordingly:
 - Backcountry **Campsite** (bcid 5): zones are Site-model → per-night `resourceBlocker`,
   equipment from the zone's `allowedEquipment` (the captured cart).
-- Backcountry **Zone** (bcid 7, e.g. Glacier Hermit Meadows, `resourceModel 2`,
-  `zoneCapacitySettings.capacity 8`): per-night `resourceZoneBlocker` with
-  `unitsBlocked = party`, and **no equipment** (its `allowedEquipment` /
-  `allowedEquipmentCategories` are empty).
+- Backcountry **Zone** (bcid 7): a quota-zone **itinerary** (verified against a captured
+  Forillon zone booking). It is an **entry point + per-night zones**:
+  - An **entry point** (`entryPointResourceId`) — a trailhead/parking resource,
+    `resourceModel 3` (AccessPoint), e.g. "Le Portage trailhead". `prepare_booking`
+    auto-uses the facility's single entry point, or lists them and asks if several.
+  - One **`resourceZoneBlocker` per night** for that night's zone (`resourceModel 2`,
+    `unitsBlocked = party`; nights may be different zones), in a **lean** shape (no
+    `blockerTransactionStatus`/`completedDate`, unlike Day Use's zone blocker).
+  - `checkInTime`/`checkOutTime` = **null**; **no equipment**; and an **extra capacity
+    count** keyed by the zone's own `zoneCapacitySettings.capacityCategoryId`
+    (`{capacityCategoryId, subCapacityCategoryId: null, count: party}`), with `isAdult`
+    flags on the four age-band entries.
 
 Same staged commits, stops before payment; prepare-on-demand only (Art. 2.4).
 
-Built from the SPA's own blocker-routing + `resourceModel` enum and verified by cart
-assembly. The one thing still unconfirmed is the live authenticated commit of a quota
-zone (a fee-free drive-to-payment test) — the prior `ResourceUnavailable` was the
-site-vs-zone hold mismatch, now corrected.
+The zone-permit cart is a **key-for-key structural match** to the captured Forillon zone
+booking (booking object, capacity counts, blockers). The one thing still unconfirmed is
+the live authenticated commit on a *different* park (the error progression
+`ResourceUnavailable` → `InvalidCart` → [fixed] tracked the hold-type then the
+entry-point/times/capacity deltas).
 
 ⚠️ Known follow-up (separate): `search_day_use` can show slots for dates beyond the
 booking-release window; those fail at commit with `MaxReservationWindowViolated`. The

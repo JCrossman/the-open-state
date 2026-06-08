@@ -331,8 +331,10 @@ export class ParksCanadaProvider {
       for (const [zoneId, counts] of Object.entries(daily)) {
         const resource = resources[zoneId];
         if (!resource) continue;
-        // Only this product's zones (a facility may host several products).
+        // Only this product's zones (a facility may host several products), and only
+        // bookable zones — entry points (resourceModel 3 AccessPoint) are not campable.
         if (!cats.has(resource["resourceCategoryId"])) continue;
+        if (resource["resourceModel"] === 3) continue;
         const open: ISODate[] = [];
         let minRemaining = Infinity;
         window.forEach((night, i) => {
@@ -378,6 +380,25 @@ export class ParksCanadaProvider {
       if (id != null) out.set(String(id), (r as any)["resourceModel"] ?? 0);
     }
     return out;
+  }
+
+  /** A backcountry facility's entry points (trailheads/parking, `resourceModel` 3 =
+   *  AccessPoint). A zone permit starts from one of these (`entryPointResourceId`). */
+  async backcountryEntryPoints(
+    campgroundId: string,
+  ): Promise<Array<{ id: string; name: string }>> {
+    const resources = await this.client.getResources(campgroundId);
+    return Object.values(resources)
+      .filter((r: any) => r["resourceModel"] === 3)
+      .map((r: any) => ({ id: String(r["resourceId"]), name: resourceName(r) ?? String(r["resourceId"]) }));
+  }
+
+  /** A zone's own capacity category (from `zoneCapacitySettings`), needed for the extra
+   *  capacity-count entry a zone-permit cart carries. */
+  async zoneCapacityCategory(campgroundId: string, zoneId: string): Promise<number | undefined> {
+    const resources = await this.client.getResources(campgroundId);
+    const z = resources[String(zoneId)] as any;
+    return z?.["zoneCapacitySettings"]?.["capacityCategoryId"];
   }
 
   /** The equipment a backcountry zone expects (from its `allowedEquipment`). The

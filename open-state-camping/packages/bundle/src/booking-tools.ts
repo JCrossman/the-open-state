@@ -112,6 +112,14 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
               "order. Requires product_id and campground_id (the facility). The trip " +
               "spans the first arrival to the last departure.",
           ),
+        entry_point_id: z
+          .string()
+          .optional()
+          .describe(
+            "For a Backcountry zone permit: the trailhead/entry point to start from " +
+              "(numeric id). If the area has only one, it's used automatically; if " +
+              "several, prepare_booking will list them and ask.",
+          ),
         confirm: z
           .boolean()
           .optional()
@@ -244,6 +252,32 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
       const models = isBackcountry
         ? await provider.resourceModels(args.campground_id)
         : new Map<string, number>();
+      const isZonePermit =
+        isBackcountry && itinerary.some((l) => models.get(String(l.zone_id)) === 2);
+
+      // A zone permit starts from an entry point (trailhead) and carries the zone's
+      // capacity category. Resolve the entry point: use the one given, else the single
+      // one the facility has; if there are several, ask which (listing them).
+      let entryPointResourceId: number | undefined;
+      let zoneCapacityCategoryId: number | undefined;
+      if (isZonePermit) {
+        const entries = await provider.backcountryEntryPoints(args.campground_id);
+        if (args.entry_point_id != null) {
+          entryPointResourceId = Number(args.entry_point_id);
+        } else if (entries.length === 1) {
+          entryPointResourceId = Number(entries[0]!.id);
+        } else if (entries.length > 1) {
+          return text(
+            "This backcountry area has several entry points (trailheads). Tell me which " +
+              "to start from and I'll prepare it (pass entry_point_id). Options:\n" +
+              entries.map((e) => `  - ${e.name}  [entry_point_id=${e.id}]`).join("\n"),
+          );
+        }
+        zoneCapacityCategoryId = await provider.zoneCapacityCategory(
+          args.campground_id,
+          itinerary[0]!.zone_id,
+        );
+      }
 
       const group: CategoryGroup = args.category ?? "campsite";
       const request: BookingRequest = {
@@ -259,6 +293,8 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
             ? Number(args.product_id)
             : BOOKING_CATEGORY_ID[group],
         bookingModel: isBackcountry ? 5 : isDayUse ? 1 : undefined,
+        entryPointResourceId,
+        zoneCapacityCategoryId,
         itinerary: isBackcountry
           ? itinerary.map((l) => ({
               resourceId: Number(l.zone_id),

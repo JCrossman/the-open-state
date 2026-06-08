@@ -292,30 +292,46 @@ describe("booking cart assembly — Backcountry (model 5)", () => {
     expect(booking.newVersion.equipmentCategoryId).toBe(-32767); // backcountry equipment
   });
 
-  it("holds a quota zone (resourceModel 2) as a zone blocker with no equipment (Glacier)", () => {
-    // Backcountry Zone permits are quota-based (resourceModel 2): each night becomes a
-    // resourceZoneBlocker with unitsBlocked = party, and they carry no equipment. Using
-    // a per-site resourceBlocker here is what the platform rejected with ResourceUnavailable.
+  it("builds a quota-zone permit cart (entry point + per-night zone blockers), matching the capture", () => {
+    // Backcountry Zone permit (verified vs a captured Forillon zone booking): an entry
+    // point, per-night resourceZoneBlockers (resourceModel 2) with unitsBlocked = party,
+    // null check-in/out, no equipment, and an extra capacity count under the zone's own
+    // capacity category. A per-site blocker / 12:00 times / missing entry point were the
+    // ResourceUnavailable + InvalidCart failures.
     const zoneTrip: BookingRequest = {
       ...bcReq,
       bookingCategoryId: 7,
       equipmentCategoryId: undefined,
       subEquipmentCategoryId: undefined,
       party: { adults: 1 },
+      entryPointResourceId: -2147471842,
+      zoneCapacityCategoryId: -32766,
       itinerary: [
-        { resourceId: -2147471851, startDate: "2026-08-25", endDate: "2026-08-26", resourceModel: 2 },
-        { resourceId: -2147471851, startDate: "2026-08-26", endDate: "2026-08-27", resourceModel: 2 },
+        { resourceId: -2147471839, startDate: "2026-08-26", endDate: "2026-08-27", resourceModel: 2 },
+        { resourceId: -2147471838, startDate: "2026-08-27", endDate: "2026-08-28", resourceModel: 2 },
       ],
     };
     const { cart } = buildBookingCart(baseCart(), zoneTrip, ids, envelope, "finalize");
     expect(cart.resourceBlockers).toEqual([]); // not site holds
     expect(cart.resourceZoneBlockers).toHaveLength(2);
     expect(cart.resourceZoneBlockers.every((b: any) => b.newVersion.unitsBlocked === 1)).toBe(true);
+    // Backcountry zone blockers are lean (no blockerTransactionStatus/completedDate).
+    expect(cart.resourceZoneBlockers[0].newVersion).not.toHaveProperty("blockerTransactionStatus");
+    expect(cart.resourceZoneBlockers[0].newVersion).not.toHaveProperty("completedDate");
     const nv = cart.bookings[0].newVersion;
     expect(nv.resourceZoneBlockerUids).toHaveLength(2);
     expect(nv.resourceBlockerUids).toEqual([]);
     expect(nv.equipmentCategoryId).toBeNull();
     expect(nv.subEquipmentCategoryId).toBeNull();
+    expect(nv.checkInTime).toBeNull();
+    expect(nv.checkOutTime).toBeNull();
+    expect(nv.entryPointResourceId).toBe(-2147471842);
+    // Extra capacity count keyed by the zone's capacity category, count = party total.
+    expect(nv.bookingCapacityCategoryCounts).toContainEqual({
+      capacityCategoryId: -32766,
+      subCapacityCategoryId: null,
+      count: 1,
+    });
   });
 });
 
