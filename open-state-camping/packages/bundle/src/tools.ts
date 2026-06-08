@@ -6,7 +6,7 @@
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { ParksCanadaProvider, windowNights } from "@open-state/core";
+import { addDays, ParksCanadaProvider, windowNights } from "@open-state/core";
 import type { BundleConfig } from "./config.js";
 import * as fmt from "./format.js";
 
@@ -283,17 +283,20 @@ export function registerTools(
     },
     async (args) => {
       try {
-        // Browse mode: no dates (or no query) → list the products, mirroring the tab.
-        if (!args.query || !args.start_date || !args.end_date) {
+        // Browse only when we can't search yet (no product query, or no date). Day Use
+        // is a SINGLE day, so end_date is optional — defaulting it must not bounce a
+        // query+date call back to the product list (that caused a re-prompt loop).
+        if (!args.query || !args.start_date) {
           const products = await provider.listDayUseProducts(args.query);
           return text(fmt.formatDayUseProducts(products, args.query));
         }
-        const dateIssue = fmt.dayUseDatesProblem(args.start_date, args.end_date);
+        const endDate = args.end_date ?? args.start_date;
+        const dateIssue = fmt.dayUseDatesProblem(args.start_date, endDate);
         if (dateIssue) return text(dateIssue);
         const slots = await provider.searchDayUse({
           query: args.query,
           startDate: args.start_date,
-          endDate: args.end_date,
+          endDate,
           partySize: args.party_size,
         });
         // No product matched the query → show the catalog so the citizen can pick.
@@ -302,7 +305,7 @@ export function registerTools(
         }
         return text(
           fmt.formatDayUse(args.query, slots, {
-            stay: stay(args.start_date, args.end_date),
+            stay: stay(args.start_date, endDate),
             partySize: args.party_size ?? 1,
           }),
         );
@@ -334,16 +337,23 @@ export function registerTools(
     },
     async (args) => {
       try {
-        if (!args.query || !args.start_date || !args.end_date) {
+        // Browse only when we can't search yet (no area query, or no date). A trip is
+        // at least one night, so end_date defaults to the next morning if omitted —
+        // don't bounce a query+date call back to the area list.
+        if (!args.query || !args.start_date) {
           const products = await provider.listBackcountryProducts(args.query);
           return text(fmt.formatBackcountryProducts(products, args.query));
         }
-        const dateIssue = fmt.stayDatesProblem(args.start_date, args.end_date);
+        const endDate =
+          args.end_date && args.end_date > args.start_date
+            ? args.end_date
+            : addDays(args.start_date, 1);
+        const dateIssue = fmt.stayDatesProblem(args.start_date, endDate);
         if (dateIssue) return text(dateIssue);
         const zones = await provider.searchBackcountry({
           query: args.query,
           startDate: args.start_date,
-          endDate: args.end_date,
+          endDate,
           partySize: args.party_size,
           accessibleOnly: args.accessible_only ?? false,
         });
@@ -352,7 +362,7 @@ export function registerTools(
         }
         return text(
           fmt.formatBackcountry(args.query, zones, {
-            stay: stay(args.start_date, args.end_date),
+            stay: stay(args.start_date, endDate),
             partySize: args.party_size ?? 1,
             accessibleOnly: args.accessible_only ?? false,
           }),

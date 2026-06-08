@@ -215,6 +215,28 @@ describe("bundle MCP server", () => {
     expect(out).toMatch(/start_date=2026-07-1[56]/);
   });
 
+  it("search_day_use returns slots from query+start_date with NO end_date (no loop)", async () => {
+    // Regression: omitting end_date (Day Use is one day) must search, not re-list products.
+    const out = await callText(await connectClient(), "search_day_use", {
+      query: "Moraine Lake shuttle",
+      start_date: "2026-07-15",
+      party_size: 2,
+    });
+    expect(out).toMatch(/spot\(s\) left/);
+    expect(out).toContain("site_id=");
+    expect(out).not.toContain("options matching"); // not the browse/list response
+  });
+
+  it("search_backcountry returns zones from query+start_date with NO end_date", async () => {
+    const out = await callText(await connectClient(), "search_backcountry", {
+      query: "Broken Group",
+      start_date: "2026-07-15",
+      party_size: 1,
+    });
+    expect(out).toContain("Hand Island");
+    expect(out).not.toContain("areas matching"); // not the browse/list response
+  });
+
   it("an ambiguous equipment word is flagged, not masked", async () => {
     const out = await callText(await connectClient(), "search_park_availability", {
       query: "Banff",
