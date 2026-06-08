@@ -313,8 +313,9 @@ export function buildResourceZoneBlocker(
   refs: BookingRefs,
   lean = false,
 ): Record<string, any> {
-  // Day Use zone blockers carry blockerTransactionStatus + completedDate; backcountry
-  // zone blockers omit them (verified vs the respective captures). `lean` = backcountry.
+  // Day Use zone blockers carry blockerTransactionStatus + completedDate (newVersion)
+  // and currentVersion/history/drafts/adminCartUid (top level); backcountry zone
+  // blockers omit ALL of those (verified vs the respective captures). `lean` = backcountry.
   const newVersion: Record<string, any> = {
     cartTransactionUid: refs.cartTransactionUid,
     creationDate: new Date().toISOString(),
@@ -329,19 +330,22 @@ export function buildResourceZoneBlocker(
     newVersion["blockerTransactionStatus"] = 0;
     newVersion["completedDate"] = null;
   }
-  return {
+  const blocker: Record<string, any> = {
+    blockerType: 0,
+    cartUid: refs.cartUid,
     resourceZoneBlockerUid: leg.uid,
     bookingUid: refs.bookingUid,
     groupHoldUid: null,
     isReservation: true,
-    currentVersion: null,
-    history: [],
     newVersion,
-    drafts: [],
-    cartUid: refs.cartUid,
-    adminCartUid: null,
-    blockerType: 0,
   };
+  if (!lean) {
+    blocker["currentVersion"] = null;
+    blocker["history"] = [];
+    blocker["drafts"] = [];
+    blocker["adminCartUid"] = null;
+  }
+  return blocker;
 }
 
 /** The booking object (one site, one stay) added to the cart's `bookings`. */

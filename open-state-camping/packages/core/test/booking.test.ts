@@ -315,9 +315,19 @@ describe("booking cart assembly — Backcountry (model 5)", () => {
     expect(cart.resourceBlockers).toEqual([]); // not site holds
     expect(cart.resourceZoneBlockers).toHaveLength(2);
     expect(cart.resourceZoneBlockers.every((b: any) => b.newVersion.unitsBlocked === 1)).toBe(true);
-    // Backcountry zone blockers are lean (no blockerTransactionStatus/completedDate).
-    expect(cart.resourceZoneBlockers[0].newVersion).not.toHaveProperty("blockerTransactionStatus");
-    expect(cart.resourceZoneBlockers[0].newVersion).not.toHaveProperty("completedDate");
+    // Backcountry zone blockers are lean — no blockerTransactionStatus/completedDate
+    // in newVersion, and no currentVersion/history/drafts/adminCartUid at top level
+    // (matches the captured Forillon cart; extra fields triggered InvalidCart).
+    const zb = cart.resourceZoneBlockers[0];
+    expect(zb.newVersion).not.toHaveProperty("blockerTransactionStatus");
+    expect(zb.newVersion).not.toHaveProperty("completedDate");
+    expect(zb).not.toHaveProperty("currentVersion");
+    expect(zb).not.toHaveProperty("history");
+    expect(zb).not.toHaveProperty("drafts");
+    expect(zb).not.toHaveProperty("adminCartUid");
+    expect(Object.keys(zb).sort()).toEqual(
+      ["blockerType", "bookingUid", "cartUid", "groupHoldUid", "isReservation", "newVersion", "resourceZoneBlockerUid"],
+    );
     const nv = cart.bookings[0].newVersion;
     expect(nv.resourceZoneBlockerUids).toHaveLength(2);
     expect(nv.resourceBlockerUids).toEqual([]);

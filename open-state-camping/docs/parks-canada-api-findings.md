@@ -331,8 +331,12 @@ routes the hold accordingly:
     `resourceModel 3` (AccessPoint), e.g. "Le Portage trailhead". `prepare_booking`
     auto-uses the facility's single entry point, or lists them and asks if several.
   - One **`resourceZoneBlocker` per night** for that night's zone (`resourceModel 2`,
-    `unitsBlocked = party`; nights may be different zones), in a **lean** shape (no
-    `blockerTransactionStatus`/`completedDate`, unlike Day Use's zone blocker).
+    `unitsBlocked = party`; nights may be different zones), in a **lean** shape: the
+    `newVersion` omits `blockerTransactionStatus`/`completedDate`, AND the top level
+    omits `currentVersion`/`history`/`drafts`/`adminCartUid` (Day Use's zone blocker
+    keeps all of those — the extra fields on the backcountry blocker triggered
+    `InvalidCart`). Only `{blockerType, cartUid, resourceZoneBlockerUid, bookingUid,
+    groupHoldUid, isReservation, newVersion}` remain.
   - `checkInTime`/`checkOutTime` = **null**; **no equipment**; and an **extra capacity
     count** keyed by the zone's own `zoneCapacitySettings.capacityCategoryId`
     (`{capacityCategoryId, subCapacityCategoryId: null, count: party}`), with `isAdult`
