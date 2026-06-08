@@ -71,7 +71,13 @@ export interface BookingRequest {
    * When set, the booking spans every leg and each leg becomes a resource blocker;
    * `resourceId`/`startDate`/`endDate` on the request are ignored in favour of the legs.
    */
-  itinerary?: Array<{ resourceId: number; startDate: ISODate; endDate: ISODate }>;
+  itinerary?: Array<{
+    resourceId: number;
+    startDate: ISODate;
+    endDate: ISODate;
+    /** Platform resourceModel (0 Site / 2 Zone). Decides site vs quota hold. */
+    resourceModel?: number;
+  }>;
 }
 
 /**
@@ -215,12 +221,21 @@ export function minimalOccupant(envelope: ShopperEnvelope): Record<string, any> 
 export type BookingStage = "hold" | "details" | "finalize";
 export const BOOKING_STAGES: readonly BookingStage[] = ["hold", "details", "finalize"];
 
+/**
+ * How a resource is held, from the platform's `resourceModel` (verified in the SPA):
+ * Site books a specific unit (`resourceBlocker`); Zone is quota-based and books N of a
+ * shared capacity (`resourceZoneBlocker` with `unitsBlocked`). Day Use slots and many
+ * backcountry zones are Zone; frontcountry sites and backcountry campsites are Site.
+ */
+export const RESOURCE_MODEL = { site: 0, nonSpecific: 1, zone: 2, accessPoint: 3, zoneEntry: 4 } as const;
+
 /** One itinerary leg: a resource (site or backcountry zone) held for a date range. */
 interface BlockerLeg {
   uid: string;
   resourceId: number;
   startDate: ISODate;
   endDate: ISODate;
+  resourceModel: number;
 }
 
 /** Identify the booking within a specific server-issued transaction. */
@@ -228,12 +243,12 @@ interface BookingRefs {
   bookingUid: string;
   cartUid: string;
   cartTransactionUid: string;
-  /** One per leg: a single site for model 0, one per night/zone for model 5. */
-  legs: BlockerLeg[];
-  resourceZoneBlockerUid: string;
+  /** Hold UIDs the booking references, split by kind (sites vs quota zones). */
+  resourceBlockerUids: string[];
+  resourceZoneBlockerUids: string[];
 }
 
-/** A site/zone hold (resource blocker) for one leg and its date range. */
+/** A site hold (resource blocker) for one leg and its date range (resourceModel Site). */
 export function buildResourceBlocker(
   leg: BlockerLeg,
   resourceLocationId: number,
@@ -261,16 +276,18 @@ export function buildResourceBlocker(
 }
 
 /**
- * The Day Use slot hold (resource *zone* blocker). Unlike the overnight resource
- * blocker, it records `unitsBlocked` (the number of spots taken) and lands in the
- * cart's `resourceZoneBlockers`. Verified against a captured shuttle booking.
+ * The quota hold (resource *zone* blocker) for one leg. Records `unitsBlocked` (spots
+ * taken from the zone's shared capacity) and lands in the cart's `resourceZoneBlockers`.
+ * Used by Day Use slots and backcountry Zone permits (resourceModel Zone).
  */
 export function buildResourceZoneBlocker(
-  request: BookingRequest,
+  leg: BlockerLeg,
+  resourceLocationId: number,
+  unitsBlocked: number,
   refs: BookingRefs,
 ): Record<string, any> {
   return {
-    resourceZoneBlockerUid: refs.resourceZoneBlockerUid,
+    resourceZoneBlockerUid: leg.uid,
     bookingUid: refs.bookingUid,
     groupHoldUid: null,
     isReservation: true,
@@ -282,11 +299,11 @@ export function buildResourceZoneBlocker(
       creationDate: new Date().toISOString(),
       status: 0,
       completedDate: null,
-      resourceLocationId: request.resourceLocationId,
-      resourceId: request.resourceId,
-      startDate: request.startDate,
-      endDate: request.endDate,
-      unitsBlocked: partySize(request.party),
+      resourceLocationId,
+      resourceId: leg.resourceId,
+      startDate: leg.startDate,
+      endDate: leg.endDate,
+      unitsBlocked,
     },
     drafts: [],
     cartUid: refs.cartUid,
@@ -330,9 +347,10 @@ export function buildBooking(
     : isBackcountry
       ? BACKCOUNTRY_CHECK_OUT_TIME
       : DEFAULT_CHECK_OUT_TIME;
-  // The booking spans every leg (model 5 has several; models 0/1 have one).
-  const startDate = refs.legs[0]?.startDate ?? request.startDate;
-  const endDate = refs.legs[refs.legs.length - 1]?.endDate ?? request.endDate;
+  // The booking spans the whole stay; the caller sets request dates to first leg's
+  // start and last leg's end for an itinerary.
+  const startDate = request.startDate;
+  const endDate = request.endDate;
   // Backcountry sends its full-day check-in/out at every stage, like Day Use; an
   // overnight site takes them from the resource model only after the hold.
   const fixedTimes = isDayUse || isBackcountry;
@@ -343,9 +361,9 @@ export function buildBooking(
     bookingBoats: [],
     bookingCapacityCategoryCounts: partyCapacityCounts(request.party),
     rateCategoryId: request.rateCategoryId ?? DEFAULT_RATE_CATEGORY_ID,
-    resourceBlockerUids: isDayUse ? [] : refs.legs.map((l) => l.uid),
+    resourceBlockerUids: refs.resourceBlockerUids,
     resourceNonSpecificBlockerUids: [],
-    resourceZoneBlockerUids: isDayUse ? [refs.resourceZoneBlockerUid] : [],
+    resourceZoneBlockerUids: refs.resourceZoneBlockerUids,
     resourceZoneEntryBlockerUids: [],
     startDate,
     endDate,
@@ -414,37 +432,57 @@ export function buildBookingCart(
   if (cart["newTransaction"]) cart["newTransaction"]["shopperUid"] = envelope.shopperUid;
 
   const model = request.bookingModel ?? BOOKING_MODEL.site;
-  // One leg per resource blocker: model 5 has several (a zone per night, from the
-  // itinerary); models 0/1 have one (the single site/slot). Each leg's hold UID is
-  // the client-minted resourceBlockerUid for the first, then fresh GUIDs.
-  const legSpecs =
-    request.itinerary && request.itinerary.length > 0
-      ? request.itinerary
-      : [{ resourceId: request.resourceId, startDate: request.startDate, endDate: request.endDate }];
-  const legs: BlockerLeg[] = legSpecs.map((l, i) => ({
-    uid: i === 0 ? ids.resourceBlockerUid : randomUUID(),
-    resourceId: l.resourceId,
-    startDate: l.startDate,
-    endDate: l.endDate,
-  }));
+  // Resolve the legs to hold. Day Use is the single slot as a quota Zone; an itinerary
+  // (backcountry) is one leg per night, each with its own resourceModel; otherwise a
+  // single Site. Each leg is then routed to a resource (site) or zone (quota) blocker
+  // by its resourceModel — the platform rejects a site hold on a quota zone.
+  const legSpecs: Array<{ resourceId: number; startDate: ISODate; endDate: ISODate; resourceModel: number }> =
+    model === BOOKING_MODEL.dayUse
+      ? [{ resourceId: request.resourceId, startDate: request.startDate, endDate: request.endDate, resourceModel: RESOURCE_MODEL.zone }]
+      : request.itinerary && request.itinerary.length > 0
+        ? request.itinerary.map((l) => ({
+            resourceId: l.resourceId,
+            startDate: l.startDate,
+            endDate: l.endDate,
+            resourceModel: l.resourceModel ?? RESOURCE_MODEL.site,
+          }))
+        : [{ resourceId: request.resourceId, startDate: request.startDate, endDate: request.endDate, resourceModel: RESOURCE_MODEL.site }];
 
   const refs: BookingRefs = {
     bookingUid: ids.bookingUid,
     cartUid,
     cartTransactionUid,
-    legs,
-    resourceZoneBlockerUid: ids.resourceZoneBlockerUid,
+    resourceBlockerUids: [],
+    resourceZoneBlockerUids: [],
   };
-  cart["bookings"] = [buildBooking(request, refs, envelope, stage)];
-  // Day Use holds the slot in resourceZoneBlockers; site & backcountry bookings hold
-  // each leg in resourceBlockers (one for a site, several across a backcountry trip).
-  if (model === BOOKING_MODEL.dayUse) {
-    cart["resourceZoneBlockers"] = [buildResourceZoneBlocker(request, refs)];
-    cart["resourceBlockers"] = [];
-  } else {
-    cart["resourceBlockers"] = legs.map((leg) =>
-      buildResourceBlocker(leg, request.resourceLocationId, refs),
-    );
+  const resourceBlockers: Array<Record<string, any>> = [];
+  const resourceZoneBlockers: Array<Record<string, any>> = [];
+  const units = partySize(request.party);
+  let usedSiteUid = false;
+  let usedZoneUid = false;
+  for (const l of legSpecs) {
+    const isZone = l.resourceModel === RESOURCE_MODEL.zone;
+    // Reuse the client-minted ids for the first hold of each kind (keeps a stable,
+    // testable id); mint fresh GUIDs for any further legs.
+    const uid = isZone
+      ? usedZoneUid
+        ? randomUUID()
+        : ((usedZoneUid = true), ids.resourceZoneBlockerUid)
+      : usedSiteUid
+        ? randomUUID()
+        : ((usedSiteUid = true), ids.resourceBlockerUid);
+    const leg: BlockerLeg = { uid, resourceId: l.resourceId, startDate: l.startDate, endDate: l.endDate, resourceModel: l.resourceModel };
+    if (isZone) {
+      resourceZoneBlockers.push(buildResourceZoneBlocker(leg, request.resourceLocationId, units, refs));
+      refs.resourceZoneBlockerUids.push(uid);
+    } else {
+      resourceBlockers.push(buildResourceBlocker(leg, request.resourceLocationId, refs));
+      refs.resourceBlockerUids.push(uid);
+    }
   }
+
+  cart["bookings"] = [buildBooking(request, refs, envelope, stage)];
+  cart["resourceBlockers"] = resourceBlockers;
+  cart["resourceZoneBlockers"] = resourceZoneBlockers;
   return { cart };
 }

@@ -316,19 +316,26 @@ facilities aren't in the site-filtered campground list, so root maps resolve via
 unfiltered `listFacilities()`.
 
 **Booking is wired.** `prepare_booking` takes an `itinerary` (one `{zone_id,
-start_date, end_date}` per night) plus the `product_id`; it builds the model-5 cart
-(one resource blocker per leg). **Equipment is product-dependent:** Backcountry
-Campsite zones (bcid 5) expose it in the zone's `allowedEquipment` (e.g.
-`{-32767,-32758}`, used by the capture); Backcountry Zone permits (bcid 7, e.g. Glacier
-Hermit Meadows) expose **none** — both the zone's `allowedEquipment` and the product's
-`allowedEquipmentCategories` are empty. So we use the zone's equipment when present and
-**omit it otherwise** (an earlier hard "couldn't determine equipment" error wrongly
-blocked all zone permits). Same staged commits, stops before payment; prepare-on-demand
-only (Art. 2.4).
+start_date, end_date}` per night) plus the `product_id`. **The hold kind is per the
+resource's `resourceModel`** (SPA enum: Site=0, NonSpecific=1, Zone=2, AccessPoint=3,
+ZoneEntry=4): a **Site** books a specific unit (`resourceBlocker`); a **Zone** is
+quota-based and books N of a shared capacity (`resourceZoneBlocker` with `unitsBlocked`,
+like Day Use). Using a site blocker on a quota zone is what the platform rejected with
+**`ResourceUnavailable`**. So `prepare_booking` looks up each leg's `resourceModel` and
+routes the hold accordingly:
+- Backcountry **Campsite** (bcid 5): zones are Site-model → per-night `resourceBlocker`,
+  equipment from the zone's `allowedEquipment` (the captured cart).
+- Backcountry **Zone** (bcid 7, e.g. Glacier Hermit Meadows, `resourceModel 2`,
+  `zoneCapacitySettings.capacity 8`): per-night `resourceZoneBlocker` with
+  `unitsBlocked = party`, and **no equipment** (its `allowedEquipment` /
+  `allowedEquipmentCategories` are empty).
 
-Remaining for model 5: one fee-free drive-to-payment confirm test against a live
-session. The pre-flight + cart build are verified; whether a no-equipment zone permit
-commits cleanly (null vs absent equipment) is the one thing the live test will confirm.
+Same staged commits, stops before payment; prepare-on-demand only (Art. 2.4).
+
+Built from the SPA's own blocker-routing + `resourceModel` enum and verified by cart
+assembly. The one thing still unconfirmed is the live authenticated commit of a quota
+zone (a fee-free drive-to-payment test) — the prior `ResourceUnavailable` was the
+site-vs-zone hold mismatch, now corrected.
 
 ⚠️ Known follow-up (separate): `search_day_use` can show slots for dates beyond the
 booking-release window; those fail at commit with `MaxReservationWindowViolated`. The

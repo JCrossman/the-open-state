@@ -368,6 +368,18 @@ export class ParksCanadaProvider {
     return zones;
   }
 
+  /** A facility's resources → `resourceModel` (0 Site, 2 Zone, …). Lets the booking
+   *  choose the right hold (a quota Zone needs a zone blocker, not a site blocker). */
+  async resourceModels(campgroundId: string): Promise<Map<string, number>> {
+    const resources = await this.client.getResources(campgroundId);
+    const out = new Map<string, number>();
+    for (const r of Object.values(resources)) {
+      const id = (r as any)["resourceId"];
+      if (id != null) out.set(String(id), (r as any)["resourceModel"] ?? 0);
+    }
+    return out;
+  }
+
   /** The equipment a backcountry zone expects (from its `allowedEquipment`). The
    *  booking carries one equipment pair for the trip; we default to the zone's first
    *  allowed option (what the captured booking used). Returns null if none listed. */

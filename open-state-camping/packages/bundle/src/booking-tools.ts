@@ -239,6 +239,12 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
         }
       }
 
+      // Each backcountry leg's hold kind depends on its resourceModel (a quota Zone
+      // needs a zone blocker, a Campsite a site blocker) — resolve it from the facility.
+      const models = isBackcountry
+        ? await provider.resourceModels(args.campground_id)
+        : new Map<string, number>();
+
       const group: CategoryGroup = args.category ?? "campsite";
       const request: BookingRequest = {
         resourceId: Number(isBackcountry ? itinerary[0]!.zone_id : args.site_id),
@@ -258,6 +264,7 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
               resourceId: Number(l.zone_id),
               startDate: l.start_date,
               endDate: l.end_date,
+              resourceModel: models.get(String(l.zone_id)),
             }))
           : undefined,
       };
