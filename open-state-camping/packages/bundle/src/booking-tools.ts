@@ -218,16 +218,18 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
       let subEquipmentCategoryId: number | undefined;
       let equipLabel = args.equipment_type;
       if (isBackcountry) {
+        // Backcountry equipment is product-dependent: Backcountry Campsite zones list
+        // it; Backcountry Zone permits carry none. Use it if present, otherwise omit
+        // it — do NOT block the booking (the old hard error broke Glacier zones).
         const bc = await provider.backcountryEquipment(
           args.campground_id,
           itinerary[0]!.zone_id,
         );
-        if (!bc) {
-          return text("I couldn't determine the backcountry permit equipment for that zone.");
+        if (bc) {
+          equipmentCategoryId = bc.equipmentCategoryId;
+          subEquipmentCategoryId = bc.subEquipmentCategoryId;
         }
-        equipmentCategoryId = bc.equipmentCategoryId;
-        subEquipmentCategoryId = bc.subEquipmentCategoryId;
-        equipLabel = "backcountry permit";
+        equipLabel = bc ? "backcountry permit" : "backcountry permit (no equipment)";
       } else if (!isDayUse) {
         try {
           const resolved = await provider.resolveEquipment(args.equipment_type ?? null);

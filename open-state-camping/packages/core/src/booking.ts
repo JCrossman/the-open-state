@@ -24,10 +24,9 @@ const DEFAULT_CHECK_OUT_TIME = "11:00";
 /** Day Use (model 1) covers the whole open day, not an overnight window. */
 const DAY_USE_CHECK_IN_TIME = "10:00";
 const DAY_USE_CHECK_OUT_TIME = "23:59";
-/** Backcountry (model 5) check-in/out and its own equipment category. */
+/** Backcountry (model 5) check-in/out times. */
 const BACKCOUNTRY_CHECK_IN_TIME = "12:00";
 const BACKCOUNTRY_CHECK_OUT_TIME = "11:00";
-const BACKCOUNTRY_EQUIPMENT = -32767;
 
 /** Booking models that share this cart machinery (verified live / from HAR). */
 export const BOOKING_MODEL = { site: 0, dayUse: 1, backcountry: 5 } as const;
@@ -307,14 +306,20 @@ export function buildBooking(
   const model = request.bookingModel ?? BOOKING_MODEL.site;
   const isDayUse = model === BOOKING_MODEL.dayUse;
   const isBackcountry = model === BOOKING_MODEL.backcountry;
-  // Equipment: Day Use carries none; backcountry uses its own category; frontcountry
-  // sites default to the non-group equipment category.
+  // Equipment: Day Use carries none. Backcountry is product-dependent — the caller
+  // supplies the zone's equipment when it has one (Backcountry Campsite), and omits it
+  // when it doesn't (Backcountry Zone permits carry no equipment), so default to null
+  // rather than forcing a category. Frontcountry sites default to non-group equipment.
   const equipmentCategoryId = isDayUse
     ? null
-    : (request.equipmentCategoryId ?? (isBackcountry ? BACKCOUNTRY_EQUIPMENT : NON_GROUP_EQUIPMENT));
+    : isBackcountry
+      ? (request.equipmentCategoryId ?? null)
+      : (request.equipmentCategoryId ?? NON_GROUP_EQUIPMENT);
   const subEquipmentCategoryId = isDayUse
     ? null
-    : (request.subEquipmentCategoryId ?? NON_GROUP_EQUIPMENT);
+    : isBackcountry
+      ? (request.subEquipmentCategoryId ?? null)
+      : (request.subEquipmentCategoryId ?? NON_GROUP_EQUIPMENT);
   const checkIn = isDayUse
     ? DAY_USE_CHECK_IN_TIME
     : isBackcountry

@@ -256,6 +256,9 @@ describe("booking cart assembly — Backcountry (model 5)", () => {
     party: { adults: 2 },
     bookingCategoryId: 5,
     bookingModel: 5,
+    // Backcountry Campsite zones list equipment; prepare_booking resolves it from the
+    // zone and passes both ids (the captured cart used -32767 / -32758).
+    equipmentCategoryId: -32767,
     subEquipmentCategoryId: -32758,
     itinerary: [
       { resourceId: -2147483547, startDate: "2026-06-13", endDate: "2026-06-14" },
@@ -287,6 +290,21 @@ describe("booking cart assembly — Backcountry (model 5)", () => {
     expect(booking.newVersion.checkInTime).toBe("12:00");
     expect(booking.newVersion.checkOutTime).toBe("11:00");
     expect(booking.newVersion.equipmentCategoryId).toBe(-32767); // backcountry equipment
+  });
+
+  it("omits equipment for a zone permit that carries none (Glacier-style)", () => {
+    // Backcountry Zone permits expose no equipment; the request supplies none, and the
+    // cart must NOT force a category (the old default broke Glacier bookings).
+    const noEquip: BookingRequest = {
+      ...bcReq,
+      bookingCategoryId: 7,
+      equipmentCategoryId: undefined,
+      subEquipmentCategoryId: undefined,
+    };
+    const nv = buildBookingCart(baseCart(), noEquip, ids, envelope, "finalize").cart
+      .bookings[0].newVersion;
+    expect(nv.equipmentCategoryId).toBeNull();
+    expect(nv.subEquipmentCategoryId).toBeNull();
   });
 });
 

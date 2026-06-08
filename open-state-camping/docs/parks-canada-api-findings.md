@@ -317,14 +317,22 @@ unfiltered `listFacilities()`.
 
 **Booking is wired.** `prepare_booking` takes an `itinerary` (one `{zone_id,
 start_date, end_date}` per night) plus the `product_id`; it builds the model-5 cart
-(one resource blocker per leg) and resolves the permit equipment from the **zone's own
-`allowedEquipment`** (e.g. `{-32767,-32758}` — the first allowed option, what the
-capture used) rather than hardcoding. Same staged commits, stops before payment.
-Per Constitution Art. 2.4 (contested, time-limited resources) this stays
-**prepare-on-demand only** — no auto-prepare/snipe at permit-release moments.
+(one resource blocker per leg). **Equipment is product-dependent:** Backcountry
+Campsite zones (bcid 5) expose it in the zone's `allowedEquipment` (e.g.
+`{-32767,-32758}`, used by the capture); Backcountry Zone permits (bcid 7, e.g. Glacier
+Hermit Meadows) expose **none** — both the zone's `allowedEquipment` and the product's
+`allowedEquipmentCategories` are empty. So we use the zone's equipment when present and
+**omit it otherwise** (an earlier hard "couldn't determine equipment" error wrongly
+blocked all zone permits). Same staged commits, stops before payment; prepare-on-demand
+only (Art. 2.4).
 
 Remaining for model 5: one fee-free drive-to-payment confirm test against a live
-session (the cart is structurally HAR-matched; the request→cart path is verified).
+session. The pre-flight + cart build are verified; whether a no-equipment zone permit
+commits cleanly (null vs absent equipment) is the one thing the live test will confirm.
+
+⚠️ Known follow-up (separate): `search_day_use` can show slots for dates beyond the
+booking-release window; those fail at commit with `MaxReservationWindowViolated`. The
+window should be surfaced at search time (needs the per-product release schedule).
 
 ## Divergences from camply (camply 0.34.2 is stale for this host)
 
