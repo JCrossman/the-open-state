@@ -246,8 +246,10 @@ export function formatBackcountry(
       (opts.accessibleOnly ? " (accessible only)" : "") +
       `. ${accessibleCount} of them are marked accessible. ${INDEPENDENCE_NOTE}`,
   ];
-  for (const [product, zs] of byProduct) {
-    lines.push("", product + ":");
+  for (const [area, zs] of byProduct) {
+    // The area (facility) and its product id are constant for the group; show once.
+    const g = zs[0]!;
+    lines.push("", `${area}  [book with campground_id=${g.campgroundId}, product_id=${g.productId}]:`);
     for (const z of zs) {
       const nights =
         z.openNights.length === 1
@@ -255,15 +257,18 @@ export function formatBackcountry(
           : `${z.openNights[0]} … ${z.openNights[z.openNights.length - 1]} (${z.openNights.length} nights)`;
       const acc = z.accessible ? "accessible" : "not marked accessible";
       lines.push(
-        `  - ${z.zoneName} — ${acc}; room on ${nights}; ${z.minRemaining} spot(s) left  [internal id ${z.zoneId}]`,
+        `  - ${z.zoneName} — ${acc}; room on ${nights}; ${z.minRemaining} spot(s) left  ` +
+          `[zone_id=${z.zoneId}; open nights: ${z.openNights.join(", ")}]`,
       );
     }
   }
   lines.push(
     "",
-    "A backcountry trip is one zone per night — tell me the zones and nights you want " +
-      "and I'll prepare the itinerary up to the payment screen for you to review and " +
-      "pay yourself. Don't show the citizen the internal ids.",
+    "A backcountry trip is one zone per night. To prepare it, call prepare_booking with " +
+      "the campground_id and product_id shown for the area, and an itinerary of " +
+      "{zone_id, start_date, end_date} — one entry per night, end_date the next morning. " +
+      "I take it to the payment screen for you to review and pay yourself. Don't show " +
+      "the citizen these internal ids.",
   );
   return lines.join("\n");
 }
@@ -320,8 +325,13 @@ export function formatDayUse(
     for (const [date, ds] of [...byDay].sort((a, b) => a[0].localeCompare(b[0]))) {
       lines.push(`  ${date}:`);
       for (const s of ds) {
+        // Carry the full booking tuple per slot — prepare_booking needs the numeric
+        // campground_id (facility) and product_id, not the product name. Day Use
+        // products can span several facilities, so put the ids on each line.
         lines.push(
-          `    - ${s.slotName} — ${s.remaining} spot(s) left  [internal id ${s.slotId}]`,
+          `    - ${s.slotName} — ${s.remaining} spot(s) left  ` +
+            `[to book: campground_id=${s.campgroundId}, product_id=${s.productId}, ` +
+            `site_id=${s.slotId}, start_date=${s.date}]`,
         );
       }
     }
@@ -333,8 +343,10 @@ export function formatDayUse(
     // the park rather than leave an accessibility need unanswered.
     "Accessibility (accessible boarding, parking, or facilities) isn't listed per " +
       "time here — contact the park to confirm what you need before you pay.",
-    "Tell me which time you'd like and I'll prepare it — I take it to the payment " +
-      "screen and you review and pay yourself. Don't show the citizen the internal ids.",
+    "To book a time, call prepare_booking with the campground_id, product_id, " +
+      "site_id, and start_date shown in brackets for it (they are numeric ids — pass " +
+      "them exactly, not the product name). I take it to the payment screen and you " +
+      "review and pay yourself. Don't show the citizen these internal ids.",
   );
   return lines.join("\n");
 }

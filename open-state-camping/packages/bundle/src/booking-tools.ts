@@ -130,6 +130,36 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
       const isBackcountry = itinerary.length > 0;
       const isDayUse = !isBackcountry && args.product_id != null;
 
+      // Ids must be the NUMERIC ids from search, not product/place names. Passing a
+      // name yields a NaN cart the platform rejects with HTTP 500 (see bug report);
+      // catch it here with a clear message that points back to the search output.
+      const badId = (v?: string | null) => v == null || v === "" || Number.isNaN(Number(v));
+      if (badId(args.campground_id)) {
+        return text(
+          "campground_id must be the numeric facility id from the search results " +
+            "(e.g. -2147483642), not a name. For Day Use and Backcountry, use the " +
+            "campground_id shown in brackets next to the result.",
+        );
+      }
+      if (isBackcountry) {
+        if (badId(args.product_id)) {
+          return text("product_id must be the numeric id shown by search_backcountry, not a name.");
+        }
+        if (itinerary.some((l) => badId(l.zone_id))) {
+          return text("Each itinerary zone_id must be the numeric id shown by search_backcountry.");
+        }
+      } else {
+        if (badId(args.site_id)) {
+          return text(
+            "site_id must be the numeric id from the search results (the site or time-" +
+              "slot id), not a name.",
+          );
+        }
+        if (isDayUse && badId(args.product_id)) {
+          return text("product_id must be the numeric id shown by search_day_use, not a name.");
+        }
+      }
+
       let startDate: string;
       let endDate: string;
       if (isBackcountry) {

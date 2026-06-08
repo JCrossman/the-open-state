@@ -180,6 +180,10 @@ describe("bundle MCP server", () => {
     expect(out).toContain("Hand Island");
     expect(out).toContain("accessible");
     expect(out).toMatch(/spot\(s\) left/);
+    // The booking ids must be surfaced so prepare_booking gets numeric ids, not names.
+    expect(out).toContain("campground_id=-2147480000");
+    expect(out).toContain("product_id=5");
+    expect(out).toMatch(/zone_id=-?\d+/);
   });
 
   it("search_backcountry with no query browses the backcountry catalog", async () => {
@@ -203,7 +207,12 @@ describe("bundle MCP server", () => {
     });
     expect(out).toContain("Moraine Lake");
     expect(out).toMatch(/spot\(s\) left/);
-    expect(out).not.toContain("internal id ".concat("undefined"));
+    // Booking ids surfaced (the fix for the day-use HTTP 500 bug): the model must get
+    // the numeric campground_id + product_id + site_id, never the product name.
+    expect(out).toContain("campground_id=-2147483642");
+    expect(out).toContain("product_id=9");
+    expect(out).toMatch(/site_id=-?\d+/);
+    expect(out).toMatch(/start_date=2026-07-1[56]/);
   });
 
   it("an ambiguous equipment word is flagged, not masked", async () => {
