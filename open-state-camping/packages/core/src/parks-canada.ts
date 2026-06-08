@@ -308,17 +308,26 @@ export class ParksCanadaProvider {
     for (const { product, facility } of pairs) {
       const rlid = String(facility.resourceLocationId);
       const cats = new Set(product.allowedResourceCategoryIds);
-      const rootMapId = facility.rootMapId;
-      if (rootMapId == null) continue;
+      // Backcountry facilities have no rootMapId in /api/resourceLocation — their
+      // zone maps come from /api/maps. Walk each root map.
+      const rootMaps =
+        facility.rootMapId != null
+          ? [facility.rootMapId]
+          : await this.client.listFacilityRootMaps(rlid);
+      if (rootMaps.length === 0) continue;
       const resources = await this.client.getResources(rlid);
-      const daily = await this.client.dailyAvailability({
-        rootMapId,
-        resourceLocationId: rlid,
-        startDate: opts.startDate,
-        endDate: opts.endDate,
-        bookingCategoryId: product.bookingCategoryId,
-        equipmentCategoryId: BACKCOUNTRY_EQUIPMENT_CATEGORY,
-      });
+      const daily: Record<string, (number | null)[]> = {};
+      for (const rootMapId of rootMaps) {
+        const part = await this.client.dailyAvailability({
+          rootMapId,
+          resourceLocationId: rlid,
+          startDate: opts.startDate,
+          endDate: opts.endDate,
+          bookingCategoryId: product.bookingCategoryId,
+          equipmentCategoryId: BACKCOUNTRY_EQUIPMENT_CATEGORY,
+        });
+        Object.assign(daily, part);
+      }
       for (const [zoneId, counts] of Object.entries(daily)) {
         const resource = resources[zoneId];
         if (!resource) continue;

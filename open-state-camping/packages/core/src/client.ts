@@ -208,6 +208,17 @@ export class GoingToCampClient {
     );
   }
 
+  /** Top-level map ids for a facility (from `/api/maps`). Backcountry facilities
+   *  carry no `rootMapId` in /api/resourceLocation — their zone maps live here. */
+  async listFacilityRootMaps(resourceLocationId: number | string): Promise<Array<number | string>> {
+    const data = (await this.get("/api/maps", {
+      resourceLocationId: String(resourceLocationId),
+    })) as Array<Record<string, any>> | null;
+    const nodes = data ?? [];
+    const roots = nodes.filter((m) => m["parentMap"] == null).map((m) => m["mapId"]);
+    return (roots.length > 0 ? roots : nodes.map((m) => m["mapId"])).filter((id) => id != null);
+  }
+
   /** Resource categories: `resourceCategoryId` → name + `resourceType` (Campsite,
    *  oTENTik, Cabin, Group, …). Lets search label sites and classify offerings. */
   async listResourceCategories(): Promise<Map<number, ResourceCategoryInfo>> {

@@ -243,16 +243,18 @@ the response is per-slot per-day `availabilityResult.remainingReservableQuota`.
 "Moraine Lake shuttle" for a real date returns the open time slots with spots left.
 ("(Park Use)" slots are filtered out as staff/internal.)
 
-⚠️ **Backcountry caveat:** the same `allowedResourceCategoryIds` mapping is *not* a
-reliable product selector for backcountry. Probing Broken Group Islands (rlid
--2147483563, all zones category "Backcountry Zone" -2147483632) returned **0
-availability under bcid 7 (Zone) but 5 under bcid 5 (Campsite) and 17 (Chilkoot)** —
-i.e. `bookingCategoryId` changes the numbers and the category→product link doesn't hold.
-The captured booking used bcid 5 at a *different* facility id (-2147483598), so the two
-"Broken Group" facilities may be distinct products. We currently book backcountry under
-the documented category→product mapping, but **which `bookingCategoryId` an area books
-under is not yet live-confirmed** — needs a backcountry *search* HAR (to see the bcid the
-SPA queries) before backcountry booking is trustworthy. (Day Use is unaffected.)
+**Backcountry search works (verified live).** The `allowedResourceCategoryIds`
+mapping IS correct (a zone facility's zones book under bcid 7, a campsite facility's
+under bcid 5 — the captured booking's bcid 5 was a *different*, campsite facility id).
+The real bug was that **backcountry facilities carry `rootMapId: null` in
+/api/resourceLocation** — their zone maps come from `GET /api/maps?resourceLocationId=`
+(top-level nodes like "Hermit Meadows", "Loop Brook"). Walking those with the
+category-correct bcid returns per-night quota. Verified: Glacier → Hermit Meadows under
+bcid 7 (party 1: 1 spot over 2 nights, matching a captured search). Earlier 0-results
+were genuine (no availability under the correct product) or the skipped null-rootMapId
+facilities. `searchBackcountry` now falls back to `/api/maps` when `rootMapId` is null.
+(WCT bcid 4 and Long Range Mountains bcid 13 appear in the same search as model-0 trail
+products with their own maps — bookable via the model-0 flow, still to wire.)
 
 **Day Use BOOKING is built** (from a second, payment-reaching HAR). The model-1 cart
 differs from model 0 in exactly these ways (our generated cart is a key-for-key match
