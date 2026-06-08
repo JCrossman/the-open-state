@@ -19,6 +19,7 @@ import { registerPolicyTools } from "./policy-tools.js";
 import { AlertStore } from "./alerts/store.js";
 import { startAlertPoller } from "./alerts/poller.js";
 import { loadSession, sessionAuthHeaders } from "./session/vault.js";
+import { VERSION } from "./version.js";
 
 import type { BundleConfig } from "./config.js";
 
@@ -79,7 +80,7 @@ export function createServerForProvider(
   const server = new McpServer(
     {
       name: "open-state-camping",
-      version: "0.1.0",
+      version: VERSION,
     },
     { instructions: serverInstructions() },
   );

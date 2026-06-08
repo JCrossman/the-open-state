@@ -1,0 +1,46 @@
+name: CI
+
+# Gate every PR to main (and pushes to main) on a clean build + the offline test
+# suite. The tests never touch the live Parks Canada API — they run against
+# recorded fixtures — so CI is deterministic and never hammers the upstream.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: open-state-camping
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm first, so setup-node's pnpm cache has a package manager to key on.
+      # Version comes from the repo's packageManager field (pnpm@10.33.0).
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: open-state-camping/pnpm-lock.yaml
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (tsc — also typechecks)
+        run: pnpm -r build
+
+      - name: Test (offline, fixture-backed)
+        run: pnpm -r test
