@@ -17,9 +17,11 @@ import {
   addDays,
   BOOKING_CATEGORY_ID,
   BOOKING_STAGES,
+  bookingPolicyHighlights,
   buildBookingCart,
   newBookingIds,
   partySize,
+  policyFamilyForCategory,
   type BookingRequest,
   type CategoryGroup,
   type ParksCanadaProvider,
@@ -306,10 +308,20 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
 
       const summary = bookingSummary(request, party, envelope, equipLabel);
 
+      // The policy family this booking falls under, so we can quote the right
+      // cancellation deadline / fee in the preview (the citizen confirms informed).
+      const policyFamily = isBackcountry
+        ? "backcountry"
+        : isDayUse
+          ? "dayUse"
+          : policyFamilyForCategory(group);
+
       // Phase 1 — prepare and describe only. Nothing is held or written.
       if (!args.confirm) {
         return text(
           summary +
+            "\n\n" +
+            bookingPolicyHighlights(policyFamily) +
             "\n\nThis is a preview — nothing is held or paid yet. If everything is " +
             "right, confirm and I'll hold the site and open your cart so you can " +
             "review and pay yourself. (A reservation, and any fee, only exists once " +

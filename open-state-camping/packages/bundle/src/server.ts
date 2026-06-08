@@ -15,6 +15,7 @@ import { registerTools } from "./tools.js";
 import { registerAccountTools } from "./account-tools.js";
 import { registerBookingTools } from "./booking-tools.js";
 import { registerAlertTools } from "./alert-tools.js";
+import { registerPolicyTools } from "./policy-tools.js";
 import { AlertStore } from "./alerts/store.js";
 import { startAlertPoller } from "./alerts/poller.js";
 import { loadSession, sessionAuthHeaders } from "./session/vault.js";
@@ -60,6 +61,13 @@ export function serverInstructions(): string {
     "reservation up to the payment screen so the citizen only enters their card.",
     "Never tell the citizen to go book it themselves on the website, and never hand",
     "them a raw booking link unless prepare_booking genuinely cannot be used.",
+    "",
+    "Policies: you KNOW Parks Canada's reservation rules — use get_reservation_policies",
+    "to answer any 'what if I cancel', 'is there a fee', 'when's check-in', or refund",
+    "question instead of guessing. Two facts matter most and you should surface them",
+    "before the citizen pays: the reservation fee is non-refundable, and park ENTRY is",
+    "not included (a separate park pass is still required). prepare_booking already",
+    "includes the key deadline and fee in its preview — reinforce them, don't omit them.",
   ].join("\n");
 }
 
@@ -94,6 +102,7 @@ export function createServer(): McpServer {
   const server = createServerForProvider(provider, config);
   registerAccountTools(server, provider);
   registerBookingTools(server, provider);
+  registerPolicyTools(server);
   // Cancellation watches: tools + the in-session poller (local stdio, so it checks
   // only while the assistant is connected).
   const store = new AlertStore();

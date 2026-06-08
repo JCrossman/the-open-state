@@ -44,6 +44,11 @@ Plain-language tools, grouped:
   screen** — you review and pay. It never pays on its own (Constitution Art. 2).
 - **Alerts:** `create_alert` / `list_alerts` / `delete_alert` — watch a campground
   and get pinged when a cancellation opens a site.
+- **Policies:** `get_reservation_policies` — Parks Canada's reservation rules in
+  plain language (fees, change/cancel deadlines and refunds, check-in times,
+  no-shows, and that park entry isn't included). The assistant also surfaces the key
+  deadline and fee right in the booking preview, so you confirm with the terms in
+  front of you.
 
 **Accessibility is the point.** Where Parks Canada exposes an accessibility
 attribute, sites are flagged per-site and filterable (`accessible_only`); output
@@ -97,6 +102,7 @@ Claude Code, and approve the `open-state-camping` server when prompted.
 - "Moraine Lake shuttle times for July 17, party of 2."
 - "Search Forillon backcountry for Aug 28 — then prepare Lean-to Les Lacs via Le Portage trailhead."
 - "Nothing's open — watch it and let me know if a cancellation comes up."
+- "What's the cancellation policy if I book a cabin and have to back out?"
 
 To book: ask the assistant to **prepare** it; it opens *your* cart at the Parks
 Canada payment screen, where you sign in (if you haven't via `connect_account`),
