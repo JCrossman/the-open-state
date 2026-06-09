@@ -1,0 +1,8 @@
+# Code owners for The Open State.
+#
+# When branch protection on `main` enables "Require review from Code Owners",
+# the owner(s) below are automatically requested to review PRs that touch
+# matching paths, and their approval is required before merge.
+
+# Default owner for everything in the repository.
+* @JCrossman
