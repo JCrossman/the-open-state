@@ -2,6 +2,15 @@
 
 **Status: detailed, with validation gates.** Build after M1 works locally. This is what turns the local tool into something a non-technical citizen can add to their assistant in one click.
 
+> **Implementation note (current):** This is a historical planning document. The
+> project was **rewritten in TypeScript** and ships as a local `.mcpb` bundle
+> (`packages/core` + `packages/bundle`); the Python/FastMCP/camply implementation and
+> the Azure remote preview have been **removed**. References to Python, camply,
+> FastMCP, SQLite, uv, or remote hosting below are historical. The authoritative,
+> current docs are [`open-state-camping/README.md`](../../open-state-camping/README.md)
+> and [`docs/01-architecture.md`](../01-architecture.md).
+
+
 ## Goal
 
 The same server, hosted, reachable as a remote MCP connector that a citizen adds through their assistant’s “add connector / add app” UI, authenticating via a consent screen. No config files, no Python on the citizen’s machine.

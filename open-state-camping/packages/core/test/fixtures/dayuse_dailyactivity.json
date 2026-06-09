@@ -1,0 +1,138 @@
+[
+  {
+    "resourceId": -2147476638,
+    "range": {
+      "start": "2026-07-15T00:00:00",
+      "end": "2026-07-15T00:00:00"
+    },
+    "availabilityResult": {
+      "resultCode": 0,
+      "resourceId": -2147476638,
+      "startDate": "2026-07-15T00:00:00",
+      "endDate": "2026-07-15T00:00:00",
+      "remainingReservableQuota": 8,
+      "remainingTotalQuota": 8,
+      "closedQuota": 0,
+      "exception": null
+    }
+  },
+  {
+    "resourceId": -2147476638,
+    "range": {
+      "start": "2026-07-16T00:00:00",
+      "end": "2026-07-16T00:00:00"
+    },
+    "availabilityResult": {
+      "resultCode": 0,
+      "resourceId": -2147476638,
+      "startDate": "2026-07-16T00:00:00",
+      "endDate": "2026-07-16T00:00:00",
+      "remainingReservableQuota": 8,
+      "remainingTotalQuota": 8,
+      "closedQuota": 0,
+      "exception": null
+    }
+  },
+  {
+    "resourceId": -2147476652,
+    "range": {
+      "start": "2026-07-15T00:00:00",
+      "end": "2026-07-15T00:00:00"
+    },
+    "availabilityResult": {
+      "resultCode": 0,
+      "resourceId": -2147476652,
+      "startDate": "2026-07-15T00:00:00",
+      "endDate": "2026-07-15T00:00:00",
+      "remainingReservableQuota": 0,
+      "remainingTotalQuota": 0,
+      "closedQuota": 0,
+      "exception": null
+    }
+  },
+  {
+    "resourceId": -2147476652,
+    "range": {
+      "start": "2026-07-16T00:00:00",
+      "end": "2026-07-16T00:00:00"
+    },
+    "availabilityResult": {
+      "resultCode": 0,
+      "resourceId": -2147476652,
+      "startDate": "2026-07-16T00:00:00",
+      "endDate": "2026-07-16T00:00:00",
+      "remainingReservableQuota": 0,
+      "remainingTotalQuota": 0,
+      "closedQuota": 0,
+      "exception": null
+    }
+  },
+  {
+    "resourceId": -2147471886,
+    "range": {
+      "start": "2026-07-15T00:00:00",
+      "end": "2026-07-15T00:00:00"
+    },
+    "availabilityResult": {
+      "resultCode": 0,
+      "resourceId": -2147471886,
+      "startDate": "2026-07-15T00:00:00",
+      "endDate": "2026-07-15T00:00:00",
+      "remainingReservableQuota": 3,
+      "remainingTotalQuota": 3,
+      "closedQuota": 0,
+      "exception": null
+    }
+  },
+  {
+    "resourceId": -2147471886,
+    "range": {
+      "start": "2026-07-16T00:00:00",
+      "end": "2026-07-16T00:00:00"
+    },
+    "availabilityResult": {
+      "resultCode": 0,
+      "resourceId": -2147471886,
+      "startDate": "2026-07-16T00:00:00",
+      "endDate": "2026-07-16T00:00:00",
+      "remainingReservableQuota": 3,
+      "remainingTotalQuota": 3,
+      "closedQuota": 0,
+      "exception": null
+    }
+  },
+  {
+    "resourceId": -2147476646,
+    "range": {
+      "start": "2026-07-15T00:00:00",
+      "end": "2026-07-15T00:00:00"
+    },
+    "availabilityResult": {
+      "resultCode": 0,
+      "resourceId": -2147476646,
+      "startDate": "2026-07-15T00:00:00",
+      "endDate": "2026-07-15T00:00:00",
+      "remainingReservableQuota": 10,
+      "remainingTotalQuota": 10,
+      "closedQuota": 0,
+      "exception": null
+    }
+  },
+  {
+    "resourceId": -2147476646,
+    "range": {
+      "start": "2026-07-16T00:00:00",
+      "end": "2026-07-16T00:00:00"
+    },
+    "availabilityResult": {
+      "resultCode": 0,
+      "resourceId": -2147476646,
+      "startDate": "2026-07-16T00:00:00",
+      "endDate": "2026-07-16T00:00:00",
+      "remainingReservableQuota": 10,
+      "remainingTotalQuota": 10,
+      "closedQuota": 0,
+      "exception": null
+    }
+  }
+]

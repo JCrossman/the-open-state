@@ -1,0 +1,871 @@
+/**
+ * Parks Canada provider, via the GoingToCamp platform. Maps the verified API
+ * (docs/parks-canada-api-findings.md) into the normalized shapes in `types.ts`.
+ * Accessibility is first-class and filterable (Constitution Art. 3).
+ */
+import {
+  BACKCOUNTRY_EQUIPMENT_CATEGORY,
+  BOOKING_CATEGORY_ID,
+  BOOKING_GROUP,
+  bookingGroupForCategory,
+  CATEGORY_GROUPS,
+  PARKS_CANADA_HOSTNAME,
+  PARKS_CANADA_NAME,
+  PARKS_CANADA_REC_AREA_ID,
+  SERVICE_TYPE_ATTR,
+  type BookingGroup,
+  type CategoryGroup,
+} from "./constants.js";
+import {
+  GoingToCampClient,
+  resourceIsAccessible,
+  type BookingCategoryRecord,
+  type CampgroundRecord,
+  type EquipmentRecord,
+  type FetchLike,
+  type ResourceCategoryInfo,
+} from "./client.js";
+import { InvalidInputError, UpstreamError } from "./errors.js";
+import {
+  compareSiteNames,
+  evaluateStay,
+  openNights,
+  windowNights,
+} from "./availability.js";
+import { localized } from "./util.js";
+import type {
+  AvailableSite,
+  BackcountryProduct,
+  BackcountryZone,
+  CampgroundAvailability,
+  DayUseProduct,
+  DayUseSlot,
+  EquipmentType,
+  ISODate,
+  RecreationArea,
+  SiteDetails,
+} from "./types.js";
+
+const PROVIDER_NAME = "parks_canada";
+
+export interface SearchSitesOptions {
+  recreationAreaId?: string;
+  campgroundId: string;
+  startDate: ISODate;
+  endDate: ISODate;
+  partySize: number;
+  equipmentType?: string | null;
+  accessibleOnly?: boolean;
+  nights?: number | null;
+  weekendsOnly?: boolean;
+  /** Which kind of stay: frontcountry campsites (default), group sites, or roofed
+   *  accommodations (oTENTik, cabin, yurt, …). Filters results by resource category. */
+  category?: CategoryGroup;
+}
+
+export interface SearchParkAvailabilityOptions {
+  query: string;
+  startDate: ISODate;
+  endDate: ISODate;
+  partySize: number;
+  equipmentType?: string | null;
+  accessibleOnly?: boolean;
+  nights?: number | null;
+  weekendsOnly?: boolean;
+  category?: CategoryGroup;
+}
+
+export class ParksCanadaProvider {
+  static readonly providerName = PROVIDER_NAME;
+
+  private readonly client: GoingToCampClient;
+  private campgroundsCache?: CampgroundRecord[];
+  private attrDefsCache?: Record<string, any>;
+  private equipmentCache?: EquipmentRecord[];
+  private resourceCategoriesCache?: Map<number, ResourceCategoryInfo>;
+  private bookingCategoriesCache?: BookingCategoryRecord[];
+  private facilitiesCache?: CampgroundRecord[];
+
+  constructor(
+    opts: {
+      client?: GoingToCampClient;
+      userAgent?: string;
+      timeoutMs?: number;
+      fetchFn?: FetchLike;
+      authHeaders?: () => Record<string, string> | undefined;
+    } = {},
+  ) {
+    this.client =
+      opts.client ??
+      new GoingToCampClient({
+        hostname: PARKS_CANADA_HOSTNAME,
+        userAgent: opts.userAgent,
+        timeoutMs: opts.timeoutMs,
+        fetchFn: opts.fetchFn,
+        authHeaders: opts.authHeaders,
+      });
+  }
+
+  // -- interface ------------------------------------------------------------
+
+  async searchParks(query: string, country = "CA"): Promise<RecreationArea[]> {
+    if (country.toUpperCase() !== "CA") return [];
+    const needle = query.toLowerCase();
+    const matched = (await this.campgrounds()).filter((c) =>
+      (c.name ?? "").toLowerCase().includes(needle),
+    );
+    if (matched.length === 0) return [];
+    const campgrounds = await Promise.all(
+      matched.map(async (c) => ({
+        provider: PROVIDER_NAME,
+        recreationAreaId: PARKS_CANADA_REC_AREA_ID,
+        campgroundId: String(c.resourceLocationId),
+        name: c.name,
+        offers: await this.offeredGroups(c.offeredCategoryIds),
+      })),
+    );
+    return [
+      {
+        provider: PROVIDER_NAME,
+        recreationAreaId: PARKS_CANADA_REC_AREA_ID,
+        name: PARKS_CANADA_NAME,
+        campgrounds,
+      },
+    ];
+  }
+
+  async listEquipmentTypes(recreationAreaId: string): Promise<EquipmentType[]> {
+    return (await this.equipment()).map((e) => ({
+      provider: PROVIDER_NAME,
+      recreationAreaId: String(recreationAreaId),
+      equipmentId: String(e.equipmentId),
+      name: e.name ?? "",
+    }));
+  }
+
+  /**
+   * Search Day Use (model 1) products — shuttles, parking, guided events — for open
+   * timed slots. Matches the query against product names, then returns each slot
+   * (e.g. "Moraine Lake: 6:30am-7am") with the spots left on each requested day.
+   */
+  async searchDayUse(opts: {
+    query: string;
+    startDate: ISODate;
+    endDate: ISODate;
+    partySize?: number;
+  }): Promise<DayUseSlot[]> {
+    const need = Math.max(1, opts.partySize ?? 1);
+    const pairs = await this.productFacilityPairs(1, opts.query);
+
+    const slots: DayUseSlot[] = [];
+    for (const { product, facility } of pairs) {
+      const rlid = String(facility.resourceLocationId);
+      const cats = new Set(product.allowedResourceCategoryIds);
+      const resources = await this.client.getResources(rlid);
+      // This product's slots only (a facility may host several products), and no
+      // staff/media "(Park Use)" internal holds.
+      const entries = Object.values(resources).filter((r: any) => {
+        if (!cats.has(r["resourceCategoryId"])) return false;
+        return !/\(park use\)/i.test(resourceName(r) ?? "");
+      });
+      const byId = new Map(entries.map((r: any) => [String(r["resourceId"]), r]));
+      if (byId.size === 0) continue;
+      const avail = await this.client.dayUseAvailability({
+        resourceLocationId: rlid,
+        resourceIds: [...byId.keys()],
+        startDate: opts.startDate,
+        endDate: opts.endDate,
+        bookingCategoryId: product.bookingCategoryId,
+      });
+      for (const a of avail) {
+        if (a.remainingQuota < need) continue;
+        const resource = byId.get(a.resourceId);
+        if (!resource) continue;
+        slots.push({
+          provider: PROVIDER_NAME,
+          recreationAreaId: PARKS_CANADA_REC_AREA_ID,
+          productId: String(product.bookingCategoryId),
+          product: product.name,
+          campgroundId: rlid,
+          slotId: a.resourceId,
+          slotName: resourceName(resource) ?? a.resourceId,
+          date: a.date,
+          remaining: a.remainingQuota,
+        });
+      }
+    }
+    slots.sort(
+      (x, y) =>
+        x.product.localeCompare(y.product) ||
+        x.date.localeCompare(y.date) ||
+        compareSiteNames(x.slotName, y.slotName),
+    );
+    return slots;
+  }
+
+  private async facilities(): Promise<CampgroundRecord[]> {
+    if (!this.facilitiesCache) this.facilitiesCache = await this.client.listFacilities();
+    return this.facilitiesCache;
+  }
+
+  /**
+   * Resolve a booking model's products to the facilities that offer them. The
+   * catalog (`/api/bookingcategories`) carries no resourceLocationId — only
+   * `allowedResourceCategoryIds` — so a product's facilities are those whose
+   * resource categories intersect. A product can span several facilities (e.g.
+   * "Backcountry Zone" → many parks), and a facility several products. The query is
+   * matched (all words) against the product name *and* facility name together, since
+   * day-use products name the place ("…(Banff)") but backcountry products are generic
+   * ("Backcountry Zone") and the place lives in the facility name.
+   */
+  private async productFacilityPairs(
+    model: number,
+    query?: string,
+  ): Promise<Array<{ product: BookingCategoryRecord; facility: CampgroundRecord }>> {
+    const products = (await this.bookingCategories()).filter((p) => p.bookingModel === model);
+    const facilities = await this.facilities();
+    const words = (query ?? "").toLowerCase().split(/\s+/).filter((w) => w.length >= 4);
+    const pairs: Array<{ product: BookingCategoryRecord; facility: CampgroundRecord }> = [];
+    for (const product of products) {
+      const cats = new Set(product.allowedResourceCategoryIds);
+      for (const facility of facilities) {
+        if (!facility.offeredCategoryIds.some((c) => cats.has(c))) continue;
+        const hay = `${product.name} ${facility.name ?? ""}`.toLowerCase();
+        if (words.every((w) => hay.includes(w))) pairs.push({ product, facility });
+      }
+    }
+    return pairs;
+  }
+
+  /** Browse the Day Use catalog — the products a citizen can pick (shuttles, parking,
+   *  guided events, …), optionally filtered by name/place. No dates needed. */
+  async listDayUseProducts(query?: string): Promise<DayUseProduct[]> {
+    const byProduct = new Map<number, DayUseProduct>();
+    for (const { product, facility } of await this.productFacilityPairs(1, query)) {
+      if (!byProduct.has(product.bookingCategoryId)) {
+        byProduct.set(product.bookingCategoryId, {
+          provider: PROVIDER_NAME,
+          recreationAreaId: PARKS_CANADA_REC_AREA_ID,
+          productId: String(product.bookingCategoryId),
+          product: product.name,
+          campgroundId: String(facility.resourceLocationId),
+        });
+      }
+    }
+    return [...byProduct.values()].sort((a, b) => a.product.localeCompare(b.product));
+  }
+
+  private async bookingCategories(): Promise<BookingCategoryRecord[]> {
+    if (!this.bookingCategoriesCache) {
+      this.bookingCategoriesCache = await this.client.listBookingCategories();
+    }
+    return this.bookingCategoriesCache;
+  }
+
+  /** Browse the backcountry catalog — the areas a citizen can pick, by place. */
+  async listBackcountryProducts(query?: string): Promise<BackcountryProduct[]> {
+    const seen = new Set<string>();
+    const out: BackcountryProduct[] = [];
+    for (const { product, facility } of await this.productFacilityPairs(5, query)) {
+      const key = `${product.bookingCategoryId}:${facility.resourceLocationId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({
+        provider: PROVIDER_NAME,
+        recreationAreaId: PARKS_CANADA_REC_AREA_ID,
+        productId: String(product.bookingCategoryId),
+        product: `${facility.name} — ${product.name}`,
+        campgroundId: String(facility.resourceLocationId),
+      });
+    }
+    return out.sort((a, b) => a.product.localeCompare(b.product));
+  }
+
+  /**
+   * Search backcountry (model 5) zones for nights with room for the party. Each zone
+   * is one itinerary leg (one zone per night); availability is a per-night quota, so
+   * a night is "open" when the remaining count is at least the party size. The
+   * product (Backcountry Campsite 5 / Zone 7 / Chilkoot 17) and facility come from the
+   * documented `allowedResourceCategoryIds` mapping, and we book under that same
+   * product. Accessibility is surfaced first-class (Constitution Art. 3).
+   *
+   * NOTE: not yet live-confirmed against a populated backcountry result — the booking
+   * cart is HAR-matched, but which `bookingCategoryId` a given area books under needs
+   * one live confirmation (see docs).
+   */
+  async searchBackcountry(opts: {
+    query: string;
+    startDate: ISODate;
+    endDate: ISODate;
+    partySize?: number;
+    accessibleOnly?: boolean;
+  }): Promise<BackcountryZone[]> {
+    const pairs = await this.productFacilityPairs(5, opts.query);
+    const window = windowNights(opts.startDate, opts.endDate);
+
+    const zones: BackcountryZone[] = [];
+    for (const { product, facility } of pairs) {
+      const rlid = String(facility.resourceLocationId);
+      const cats = new Set(product.allowedResourceCategoryIds);
+      // Backcountry facilities have no rootMapId in /api/resourceLocation — their
+      // zone maps come from /api/maps. Walk each root map.
+      const rootMaps =
+        facility.rootMapId != null
+          ? [facility.rootMapId]
+          : await this.client.listFacilityRootMaps(rlid);
+      if (rootMaps.length === 0) continue;
+      const resources = await this.client.getResources(rlid);
+      const daily: Record<string, (number | null)[]> = {};
+      for (const rootMapId of rootMaps) {
+        const part = await this.client.dailyAvailability({
+          rootMapId,
+          resourceLocationId: rlid,
+          startDate: opts.startDate,
+          endDate: opts.endDate,
+          bookingCategoryId: product.bookingCategoryId,
+          equipmentCategoryId: BACKCOUNTRY_EQUIPMENT_CATEGORY,
+        });
+        Object.assign(daily, part);
+      }
+      for (const [zoneId, counts] of Object.entries(daily)) {
+        const resource = resources[zoneId];
+        if (!resource) continue;
+        // Only this product's zones (a facility may host several products), and only
+        // bookable zones — entry points (resourceModel 3 AccessPoint) are not campable.
+        if (!cats.has(resource["resourceCategoryId"])) continue;
+        if (resource["resourceModel"] === 3) continue;
+        // Backcountry availability is a STATUS code, not a quota count: 0 = available
+        // for that night (like frontcountry), non-zero = not available. (Verified live:
+        // a full zone returns 1/5, an open zone returns 0.)
+        const open: ISODate[] = window.filter((_n, i) => counts[i] === 0);
+        if (open.length === 0) continue;
+        const accessible = resourceIsAccessible(resource);
+        if (opts.accessibleOnly && !accessible) continue;
+        zones.push({
+          provider: PROVIDER_NAME,
+          recreationAreaId: PARKS_CANADA_REC_AREA_ID,
+          productId: String(product.bookingCategoryId),
+          product: `${facility.name} — ${product.name}`,
+          campgroundId: rlid,
+          zoneId,
+          zoneName: resourceName(resource) ?? zoneId,
+          accessible,
+          openNights: open,
+        });
+      }
+    }
+    zones.sort(
+      (a, b) =>
+        (a.accessible ? 0 : 1) - (b.accessible ? 0 : 1) ||
+        a.product.localeCompare(b.product) ||
+        compareSiteNames(a.zoneName, b.zoneName),
+    );
+    return zones;
+  }
+
+  /** A facility's resources → `resourceModel` (0 Site, 2 Zone, …). Lets the booking
+   *  choose the right hold (a quota Zone needs a zone blocker, not a site blocker). */
+  async resourceModels(campgroundId: string): Promise<Map<string, number>> {
+    const resources = await this.client.getResources(campgroundId);
+    const out = new Map<string, number>();
+    for (const r of Object.values(resources)) {
+      const id = (r as any)["resourceId"];
+      if (id != null) out.set(String(id), (r as any)["resourceModel"] ?? 0);
+    }
+    return out;
+  }
+
+  /** A backcountry facility's entry points (trailheads/parking, `resourceModel` 3 =
+   *  AccessPoint). A zone permit starts from one of these (`entryPointResourceId`). */
+  async backcountryEntryPoints(
+    campgroundId: string,
+  ): Promise<Array<{ id: string; name: string }>> {
+    const resources = await this.client.getResources(campgroundId);
+    return Object.values(resources)
+      .filter((r: any) => r["resourceModel"] === 3)
+      .map((r: any) => ({ id: String(r["resourceId"]), name: resourceName(r) ?? String(r["resourceId"]) }));
+  }
+
+  /** The capacity category for a zone-permit's extra capacity count — the *product's*
+   *  `additionalCapacityCategoryId` (constant per product), NOT the zone's own
+   *  `zoneCapacitySettings` (which varies per zone and was the wrong source). */
+  async backcountryCapacityCategory(productId: number): Promise<number | undefined> {
+    const p = (await this.bookingCategories()).find((c) => c.bookingCategoryId === productId);
+    return p?.additionalCapacityCategoryId;
+  }
+
+  /** The equipment a backcountry zone expects (from its `allowedEquipment`). The
+   *  booking carries one equipment pair for the trip; we default to the zone's first
+   *  allowed option (what the captured booking used). Returns null if none listed. */
+  async backcountryEquipment(
+    campgroundId: string,
+    zoneId: string,
+  ): Promise<{ equipmentCategoryId: number; subEquipmentCategoryId: number } | null> {
+    const resources = await this.client.getResources(campgroundId);
+    const zone = resources[String(zoneId)];
+    const allowed = (zone?.["allowedEquipment"] ?? []) as Array<Record<string, number>>;
+    const first = allowed[0];
+    if (!first) return null;
+    return {
+      equipmentCategoryId: first["equipmentCategoryId"]!,
+      subEquipmentCategoryId: first["subEquipmentCategoryId"]!,
+    };
+  }
+
+  async searchSites(opts: SearchSitesOptions): Promise<AvailableSite[]> {
+    const rootMapId = await this.rootMapId(opts.campgroundId);
+    if (rootMapId == null) {
+      throw new UpstreamError(
+        `Could not find a Parks Canada campground with id ${opts.campgroundId}.`,
+      );
+    }
+    const group = opts.category ?? "campsite";
+    const equipmentId = await this.resolveEquipmentId(opts.equipmentType);
+    const resources = await this.client.getResources(opts.campgroundId);
+    const daily = await this.client.dailyAvailability({
+      rootMapId,
+      resourceLocationId: opts.campgroundId,
+      startDate: opts.startDate,
+      endDate: opts.endDate,
+      equipmentId,
+      bookingCategoryId: BOOKING_CATEGORY_ID[group],
+    });
+    const window = windowNights(opts.startDate, opts.endDate);
+    const campgroundName = await this.campgroundName(opts.campgroundId);
+    const defs = await this.attrDefs();
+    // Keep only the kind of stay asked for (campsites by default); each resource
+    // carries a resourceCategoryId that tells campsite vs group vs accommodation.
+    const wantCategories = CATEGORY_GROUPS[group];
+    const categoryNames = await this.resourceCategories();
+    const bookingUrl = this.client.buildBookingUrl({
+      mapId: rootMapId,
+      resourceLocationId: opts.campgroundId,
+      startDate: opts.startDate,
+      endDate: opts.endDate,
+      partySize: opts.partySize,
+      equipmentId,
+    });
+
+    const sites: AvailableSite[] = [];
+    for (const [resourceId, dayCodes] of Object.entries(daily)) {
+      const resource = resources[resourceId];
+      if (!resource) continue;
+      const categoryId = resource["resourceCategoryId"] as number | undefined;
+      if (categoryId == null || !wantCategories.has(categoryId)) continue;
+      const { qualifies, dates } = evaluateStay(
+        openNights(window, dayCodes),
+        window,
+        opts.nights ?? null,
+        opts.weekendsOnly ?? false,
+      );
+      if (!qualifies) continue;
+      const accessible = resourceIsAccessible(resource);
+      if (opts.accessibleOnly && !accessible) continue;
+      const maxOccupancy = resource["maxCapacity"] as number | undefined;
+      if (opts.partySize && maxOccupancy != null && maxOccupancy < opts.partySize) {
+        continue;
+      }
+      sites.push({
+        provider: PROVIDER_NAME,
+        recreationArea: PARKS_CANADA_NAME,
+        recreationAreaId: PARKS_CANADA_REC_AREA_ID,
+        campground: campgroundName,
+        campgroundId: String(opts.campgroundId),
+        campsiteId: resourceId,
+        siteName: resourceName(resource) ?? resourceId,
+        accessible,
+        availableDates: dates,
+        siteType: categoryNames.get(categoryId)?.name ?? serviceTypeLabel(resource, defs),
+        maxOccupancy: maxOccupancy ?? undefined,
+        bookingUrl,
+      });
+    }
+    sites.sort(
+      (a, b) =>
+        (a.accessible ? 0 : 1) - (b.accessible ? 0 : 1) ||
+        compareSiteNames(a.siteName, b.siteName),
+    );
+    return sites;
+  }
+
+  async searchParkAvailability(
+    opts: SearchParkAvailabilityOptions,
+  ): Promise<CampgroundAvailability[]> {
+    // Resolve once up front: a bad equipment type is a problem with the request,
+    // not with any one campground, so fail fast rather than "could not check" on
+    // every row.
+    await this.resolveEquipmentId(opts.equipmentType);
+    const areas = await this.searchParks(opts.query);
+    const campgrounds = areas.length > 0 ? areas[0]!.campgrounds : [];
+    const results: CampgroundAvailability[] = [];
+    for (const cg of campgrounds) {
+      try {
+        const sites = await this.searchSites({
+          recreationAreaId: cg.recreationAreaId,
+          campgroundId: cg.campgroundId,
+          startDate: opts.startDate,
+          endDate: opts.endDate,
+          partySize: opts.partySize,
+          equipmentType: opts.equipmentType,
+          accessibleOnly: opts.accessibleOnly,
+          nights: opts.nights,
+          weekendsOnly: opts.weekendsOnly,
+          category: opts.category,
+        });
+        results.push({
+          provider: PROVIDER_NAME,
+          recreationAreaId: cg.recreationAreaId,
+          campgroundId: cg.campgroundId,
+          campgroundName: cg.name,
+          openSiteCount: sites.length,
+          accessibleCount: sites.filter((s) => s.accessible).length,
+        });
+      } catch (exc) {
+        results.push({
+          provider: PROVIDER_NAME,
+          recreationAreaId: cg.recreationAreaId,
+          campgroundId: cg.campgroundId,
+          campgroundName: cg.name,
+          openSiteCount: 0,
+          accessibleCount: 0,
+          error: exc instanceof Error ? exc.message : String(exc),
+        });
+      }
+    }
+    // Most open sites first; campgrounds with nothing fall to the bottom.
+    results.sort(
+      (a, b) =>
+        (a.error ? 1 : 0) - (b.error ? 1 : 0) || b.openSiteCount - a.openSiteCount,
+    );
+    return results;
+  }
+
+  async siteDetails(opts: {
+    recreationAreaId?: string;
+    campgroundId: string;
+    campsiteId: string;
+  }): Promise<SiteDetails> {
+    const resources = await this.client.getResources(opts.campgroundId);
+    const resource = resources[String(opts.campsiteId)];
+    if (!resource) {
+      throw new UpstreamError(
+        `Could not find campsite ${opts.campsiteId} in campground ${opts.campgroundId}.`,
+      );
+    }
+    const defs = await this.attrDefs();
+    const accessible = resourceIsAccessible(resource);
+    const notes: string[] = [];
+    if (accessible) notes.push("Parks Canada marks this site as accessible.");
+    const serviceLabel = serviceTypeLabel(resource, defs);
+    if (serviceLabel) notes.push(`Service type: ${serviceLabel}.`);
+    return {
+      provider: PROVIDER_NAME,
+      recreationAreaId: String(opts.recreationAreaId ?? PARKS_CANADA_REC_AREA_ID),
+      campsiteId: String(opts.campsiteId),
+      siteName: resourceName(resource) ?? String(opts.campsiteId),
+      accessible,
+      amenities: amenities(resource, defs),
+      accessibilityNotes: notes,
+      photos: photos(resource),
+      maxOccupancy: (resource["maxCapacity"] as number | undefined) ?? undefined,
+      siteType: serviceLabel,
+    };
+  }
+
+  fetchPhoto(url: string): Promise<{ bytes: Uint8Array; contentType: string } | null> {
+    return this.client.fetchImage(url);
+  }
+
+  /** The signed-in citizen's account info, to verify a captured session. */
+  getUserInfo(): Promise<Record<string, any> | null> {
+    return this.client.getUserInfo();
+  }
+
+  /** The signed-in citizen's reservations/bookings. */
+  getMyBookings(): Promise<unknown> {
+    return this.client.getMyBookings();
+  }
+
+  /** The citizen's full shopper profile (phone, address, etc.). */
+  getShopper(): Promise<Record<string, any> | null> {
+    return this.client.getShopper();
+  }
+
+  /** Update the citizen's profile (after they confirm). */
+  updateShopper(profile: Record<string, any>): Promise<unknown> {
+    return this.client.updateShopper(profile);
+  }
+
+  /** The raw GET /api/shopper envelope, needed to assemble a booking cart. */
+  getShopperEnvelope(): Promise<Record<string, any> | null> {
+    return this.client.getShopperEnvelope();
+  }
+
+  /** Get a fresh cart (server-issued cartUid) to begin a booking. */
+  getNewCart(): Promise<Record<string, any>> {
+    return this.client.getNewCart();
+  }
+
+  /** Start a server-issued cart transaction (the real cart skeleton to book into). */
+  newCartTransaction(cartUid: string): Promise<Record<string, any>> {
+    return this.client.newCartTransaction(cartUid);
+  }
+
+  /** Read a cart back, to confirm a booking actually landed in it. */
+  getCart(cartUid: string, cartTransactionUid: string): Promise<Record<string, any> | null> {
+    return this.client.getCart(cartUid, cartTransactionUid);
+  }
+
+  /**
+   * Resolve a citizen's equipment word or id to the platform's equipment id, for
+   * booking. Throws InvalidInputError (naming the options) for an ambiguous or
+   * unknown word; `null`/empty → no specific equipment (caller picks a default).
+   */
+  resolveEquipment(equipmentType?: string | null): Promise<number | null> {
+    return this.resolveEquipmentId(equipmentType);
+  }
+
+  /** Commit a booking cart (after the citizen confirms; never past payment). */
+  commitCart(
+    cart: { cart: Record<string, any> },
+    opts: { isCompleted?: boolean; isSelfCheckIn?: boolean } = {},
+  ): Promise<unknown> {
+    return this.client.commitCart(cart, opts);
+  }
+
+  async bookingUrl(opts: {
+    campgroundId: string;
+    startDate: ISODate;
+    endDate: ISODate;
+    partySize: number;
+    equipmentType?: string | null;
+  }): Promise<string> {
+    const rootMapId = await this.rootMapId(opts.campgroundId);
+    if (rootMapId == null) {
+      throw new UpstreamError(
+        `Could not find a Parks Canada campground with id ${opts.campgroundId}.`,
+      );
+    }
+    const equipmentId = await this.resolveEquipmentId(opts.equipmentType);
+    return this.client.buildBookingUrl({
+      mapId: rootMapId,
+      resourceLocationId: opts.campgroundId,
+      startDate: opts.startDate,
+      endDate: opts.endDate,
+      partySize: opts.partySize,
+      equipmentId,
+    });
+  }
+
+  // -- helpers --------------------------------------------------------------
+
+  private async campgrounds(): Promise<CampgroundRecord[]> {
+    if (!this.campgroundsCache) {
+      this.campgroundsCache = await this.client.listCampgrounds();
+    }
+    return this.campgroundsCache;
+  }
+
+  private async equipment(): Promise<EquipmentRecord[]> {
+    if (!this.equipmentCache) {
+      this.equipmentCache = await this.client.listEquipmentTypes();
+    }
+    return this.equipmentCache;
+  }
+
+  /** Cached resourceCategoryId → {name, resourceType} (Campsite, oTENTik, Cabin, …). */
+  private async resourceCategories(): Promise<Map<number, ResourceCategoryInfo>> {
+    if (!this.resourceCategoriesCache) {
+      this.resourceCategoriesCache = await this.client.listResourceCategories();
+    }
+    return this.resourceCategoriesCache;
+  }
+
+  /** The distinct booking groups a campground offers (Frontcountry Camping,
+   *  Accommodations, Backcountry, Day Use), grounded in its resource categories. */
+  private async offeredGroups(offeredCategoryIds: number[]): Promise<BookingGroup[]> {
+    const cats = await this.resourceCategories();
+    const groups = new Set<BookingGroup>();
+    for (const id of offeredCategoryIds) {
+      const g = bookingGroupForCategory(id, cats.get(id)?.resourceType);
+      if (g) groups.add(g);
+    }
+    // Stable, user-facing order.
+    const order = [
+      BOOKING_GROUP.frontcountry,
+      BOOKING_GROUP.accommodation,
+      BOOKING_GROUP.backcountry,
+      BOOKING_GROUP.dayUse,
+    ];
+    return order.filter((g) => groups.has(g));
+  }
+
+  /** Booking groups a single campground offers, by id (for empty-result hints). */
+  async campgroundOfferings(campgroundId: string): Promise<BookingGroup[]> {
+    const cg = (await this.campgrounds()).find(
+      (c) => String(c.resourceLocationId) === String(campgroundId),
+    );
+    return cg ? this.offeredGroups(cg.offeredCategoryIds) : [];
+  }
+
+  private async attrDefs(): Promise<Record<string, any>> {
+    if (!this.attrDefsCache) {
+      this.attrDefsCache = await this.client.attributeDefinitions();
+    }
+    return this.attrDefsCache;
+  }
+
+  private async findCampground(
+    campgroundId: string,
+  ): Promise<CampgroundRecord | undefined> {
+    const target = String(campgroundId);
+    return (await this.campgrounds()).find(
+      (c) => String(c.resourceLocationId) === target,
+    );
+  }
+
+  private async rootMapId(campgroundId: string): Promise<number | string | null> {
+    const c = await this.findCampground(campgroundId);
+    return c ? c.rootMapId : null;
+  }
+
+  private async campgroundName(campgroundId: string): Promise<string> {
+    const c = await this.findCampground(campgroundId);
+    return c?.name || String(campgroundId);
+  }
+
+  /**
+   * Turn a citizen's equipment word or id into the platform's id. A word that
+   * matches several types, or none, raises `InvalidInputError` naming the
+   * options rather than guessing (Constitution Art. 7.1). `null`/empty → no filter.
+   */
+  private async resolveEquipmentId(
+    equipmentType?: string | null,
+  ): Promise<number | null> {
+    if (equipmentType == null) return null;
+    const text = equipmentType.trim();
+    if (!text) return null;
+    const equipment = await this.equipment();
+
+    if (/^-?\d+$/.test(text)) {
+      const asId = parseInt(text, 10);
+      const known = new Set(equipment.map((e) => e.equipmentId));
+      if (known.size === 0 || known.has(asId)) return asId;
+      throw new InvalidInputError(
+        `'${equipmentType}' is not a known equipment id. ` +
+          equipmentOptions(equipment),
+      );
+    }
+
+    const needle = text.toLowerCase();
+    const matches = equipment.filter((e) => {
+      const name = (e.name ?? "").toLowerCase();
+      return name.includes(needle) || needle.includes(name);
+    });
+    if (matches.length === 1) return matches[0]!.equipmentId;
+    if (matches.length === 0) {
+      throw new InvalidInputError(
+        `I do not recognize the equipment '${equipmentType}'. ` +
+          equipmentOptions(equipment),
+      );
+    }
+    throw new InvalidInputError(
+      `'${equipmentType}' matches several equipment types - tell me which ` +
+        `one (by id). ` +
+        equipmentOptions(matches),
+    );
+  }
+}
+
+// -- module-level pure helpers ------------------------------------------------
+
+function equipmentOptions(equipment: EquipmentRecord[]): string {
+  if (equipment.length === 0) {
+    return "Use list_equipment_types to see the valid equipment ids.";
+  }
+  const listed = equipment
+    .map((e) => `${e.name || "equipment"} (${e.equipmentId})`)
+    .join(", ");
+  return `Valid options are: ${listed}.`;
+}
+
+function resourceName(resource: Record<string, any>): string | undefined {
+  return localized(resource["localizedValues"], "name") as string | undefined;
+}
+
+function photos(resource: Record<string, any>): string[] {
+  const urls: string[] = [];
+  for (const photo of resource["photos"] ?? []) {
+    const result = (photo ?? {})["photoUrlResult"] ?? {};
+    const url = result["url"] ?? result["avifUrl"];
+    if (url) urls.push(url);
+  }
+  return urls;
+}
+
+function attrValues(resource: Record<string, any>, attributeId: number): number[] {
+  for (const attribute of resource["definedAttributes"] ?? []) {
+    if (attribute["attributeDefinitionId"] === attributeId) {
+      let values: number[] | undefined = attribute["values"];
+      if (values == null && attribute["value"] != null) values = [attribute["value"]];
+      return values ?? [];
+    }
+  }
+  return [];
+}
+
+function displayName(definition: Record<string, any>): string | undefined {
+  return localized(definition["localizedValues"], "displayName") as string | undefined;
+}
+
+function enumLabelsFromDef(definition: Record<string, any>): Map<number, string> {
+  const labels = new Map<number, string>();
+  for (const value of definition["values"] ?? []) {
+    const enumValue = value["enumValue"];
+    if (enumValue != null) {
+      labels.set(enumValue, localized(value["localizedValues"], "displayName") as string);
+    }
+  }
+  return labels;
+}
+
+function enumLabels(
+  defs: Record<string, any>,
+  attributeId: number,
+): Map<number, string> {
+  const definition = defs[String(attributeId)];
+  return definition ? enumLabelsFromDef(definition) : new Map();
+}
+
+function serviceTypeLabel(
+  resource: Record<string, any>,
+  defs: Record<string, any>,
+): string | undefined {
+  const labels = enumLabels(defs, SERVICE_TYPE_ATTR);
+  for (const value of attrValues(resource, SERVICE_TYPE_ATTR)) {
+    const label = labels.get(value);
+    if (label) return label;
+  }
+  return undefined;
+}
+
+function amenities(
+  resource: Record<string, any>,
+  defs: Record<string, any>,
+): string[] {
+  const out: string[] = [];
+  for (const attribute of resource["definedAttributes"] ?? []) {
+    const definition = defs[String(attribute["attributeDefinitionId"])];
+    if (!definition) continue;
+    const name = displayName(definition);
+    if (!name) continue;
+    const labelMap = enumLabelsFromDef(definition);
+    let values: any[] | undefined = attribute["values"];
+    if (values == null && attribute["value"] != null) values = [attribute["value"]];
+    const labels = (values ?? [])
+      .map((v) => String(labelMap.get(v) ?? v))
+      .filter((label) => label);
+    if (labels.length > 0) out.push(`${name}: ${labels.join(", ")}`);
+  }
+  return out;
+}

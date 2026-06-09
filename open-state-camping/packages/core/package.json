@@ -1,0 +1,28 @@
+{
+  "name": "@open-state/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared core: Parks Canada (GoingToCamp) read client, normalized types, accessibility + equipment logic, notification-target validation.",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
+  }
+}

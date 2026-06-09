@@ -1,5 +1,14 @@
 # M2 validation findings (gates G1–G3) + auth decisions
 
+> **Implementation note (current):** This is a historical research document. The
+> project was **rewritten in TypeScript** and ships as a local `.mcpb` bundle, and
+> the **remote-OAuth / hosted model was dropped** in favour of on-device session
+> capture in a local encrypted vault (no IdP, no remote OAuth). The FastMCP /
+> OAuth / Azure findings below are historical and no longer describe the build.
+> The authoritative, current docs are
+> [`open-state-camping/README.md`](../open-state-camping/README.md) and
+> [`docs/01-architecture.md`](01-architecture.md).
+
 **Status: research complete (May 2026). No code written against assumptions yet.**
 This closes the M2 validation gates from `docs/milestones/m2-remote-oauth.md` as far
 as research can, flags what can only be confirmed at deploy time, and records the

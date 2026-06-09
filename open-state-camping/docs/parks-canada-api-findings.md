@@ -82,6 +82,282 @@ The link prefills the **campground + dates + party + equipment**; the citizen
 picks the exact site and confirms in their own session. It is not per-site.
 [constructed from camply `get_reservation_link` + verified params; not click-tested]
 
+### Booking write path (authenticated; verified working end-to-end)
+
+A booking, in plain language: search → assemble a cart → commit it through the
+wizard's stages → hand the citizen their cart in their own browser to pay. Driven
+to the **payment screen but not paid** — no reservation and no fee exist until
+payment (the fee attaches only *after a reservation is confirmed*). Payment is a
+separate step we never automate (Art. 2).
+
+**The full sequence (all verified against the live system):**
+
+1. **`GET /api/cart`** — the server creates a cart and returns it with a
+   **server-generated `cartUid`**. (SPA: `initializeNewCart`.) A *client*-minted
+   cartUid is rejected.
+2. **`GET /api/cart/newtransaction?cartUid=<that>`** — the server initializes the
+   transaction and returns the cart with `newTransaction` populated:
+   `cartTransactionUid`, `shiftUid`, `userUid`, `referenceNumberPrefix` (`INPC26`),
+   `terminalLocationId` (`-2147483647`, the online terminal). (SPA:
+   `initializeNewCartTransaction`.) **These are server-authoritative — fabricating
+   them (e.g. zero-UUIDs) gets a bare HTTP 400 with no field detail.**
+3. Attach the shopper to the cart (SPA: `populateShopperOnCart`): set
+   `cart.shopper` = the raw `GET /api/shopper` envelope and
+   `cart.newTransaction.shopperUid` = the shopper's uid.
+4. Add the booking + hold into *that* cart (only `bookingUid` and
+   `resourceBlockerUid` are client-minted) and **`POST
+   /api/cart/commit?isCompleted=false&isSelfCheckIn=false`**, re-sending the whole
+   `{ "cart": { … } }` at each wizard stage (hold → details → finalize). The first
+   commit *is* the hold — no separate hold endpoint; an unpaid cart expires on its own.
+5. **Hand-off:** the SPA decides which cart to show from `localStorage`
+   (keys `cartUid` / `cartTransactionUid`), **not** from the session — so before
+   opening `/cart` in the citizen's browser, seed those keys with the built cart's
+   ids, or the page shows a fresh empty cart. Read the cart back with
+   **`GET /api/cart/get?cartUid=…&cartTransactionUid=…`** to confirm the booking landed.
+
+**Cart/booking shape:**
+- **`cart.bookings[0].newVersion`** carries the booking: `startDate`/`endDate`,
+  `equipmentCategoryId`/`subEquipmentCategoryId`, `rateCategoryId` (`-32768`
+  standard), `checkInTime` `14:00` / `checkOutTime` `11:00` (from
+  `/api/resource/model`), `bookingCapacityCategoryCounts`, `occupant`,
+  `bookingMembers`, `resourceBlockerUids`. `completedDate` `null`, `bookingStatus`
+  `0` until payment. (`completedDate` is a timestamp on the hold-stage commit only.)
+- **Party counts** = four entries under `capacityCategoryId -32767`, by
+  `subCapacityCategoryId`: **`-32768` Adult, `-32767` Senior, `-32766` Youth,
+  `-32765` Child**.
+- **Occupant is a *projection* of the shopper, not a clone.** For "I am the
+  occupant": copy `addresses[0]` → `address`, copy `contact` and `phoneNumbers`
+  objects across unchanged, carry `firstName`/`lastName`/`email`/
+  `preferredCultureName`/`defaultRateCategoryId`/`defaultPassNumber`, set
+  `copiedShopperUid = shopperUid`, `bookingCustomerChainUid = null`, and
+  `allowMarketing`/`allowEmergencySms` (default `false`). Profile-only fields
+  (`vehicles`, `boats`, `communicationPreferences`, flagged dates) are dropped.
+- **`bookingMembers[0]`** (added at the finalize stage) = the holder:
+  `{ firstName, lastName, isBookingHolder: true, order: 0 }`.
+- **`booking.currentVersion` stays `null`** across every commit, so re-committing
+  the whole cart is fine — no optimistic-concurrency version to thread back.
+- Supporting reads the SPA fires around the commits (not all required to write):
+  `/api/availability/resourcestatus`, `/api/resource/model`,
+  `/api/resourcelocation/resourceId`, `/api/surcharge/getSurchargeDetailsPackageForBooking`,
+  `/api/cart/get|lineitems|resourceinfo`, `/api/bookingvalidation/*`,
+  `/api/payment/balanceowing|typesettings` (payment screen).
+
+Implemented in `packages/core/src/{client,booking}.ts` and
+`packages/bundle/src/booking-tools.ts`; the cart assembly is checked by an
+**offline replay-diff** test (`packages/core/test/booking.test.ts`) against a
+sanitized capture in `test/fixtures/booking/` — the cart is rebuilt from inputs and
+asserted against what the platform accepted, with no network call. **Lesson that
+kept recurring: use the real object the server returns; don't reconstruct it.**
+
+## Resource categories & the four booking groups (verified)
+
+`GET /api/resourcecategory` names every resource category and gives its
+`resourceType`, which is the booking-model divider:
+- **type 0** — a specific site reserved for nights. Campsite (`-2147483648`),
+  Overflow (`-2147483641`), Group (`-2147483640`), Seasonal (`-2147483624`), and
+  the accommodations: Yurt (`-2147483647`), oTENTik (`-2147483643`), Ôasis
+  (`-2147483644`), Rustic Cabin (`-2147483645`), Cabin (`-2147483646`), MicrOcube
+  (`-2147483642`), Prospector Tent (`-2147483630`), Teepee (`-2147483631`),
+  Equipped Camping (`-2147483635`).
+- **type 2** — Day Use time slots (Shuttle, Parking, Ferry, Guided Hike/Event,
+  Fishing, Learn-to, Day Use Bus, Day Runner Hike).
+- **type 3** — Backcountry (Backcountry Zone/Site/Shelter/Yurt/Cabin, Hiking/
+  Backpacking Trip, Access Point).
+
+`GET /api/searchcriteriatabs` maps the four UI tabs to `bookingCategoryId`s, and
+`GET /api/bookingcategories` names them: Campsite 0, Accommodation 1, Group 2, …
+**Categorisation is per-resource** (`resource.resourceCategoryId`), *not* a search
+filter — `/api/availability/map` returns the same resources for any
+`bookingCategoryId`, **but availability only populates for accommodations/group
+when the matching `bookingCategoryId` is passed**, so the search must both pass
+`bookingCategoryId` *and* filter resources by `resourceCategoryId`.
+
+> ⚠️ Earlier constants mislabeled `-2147483647` as "Overflow" (it's **Yurt**) and
+> `-2147483643` as "Group" (it's **oTENTik**); the real Group is `-2147483640` and
+> Overflow `-2147483641`. Corrected in `constants.ts` (`RESOURCE_CATEGORY`,
+> `CATEGORY_GROUPS`). Model 0 (Campsite / Group / Accommodation) share the
+> search+booking machinery; Day Use (model 1) and Backcountry (model 5) do not.
+
+**Model 0 is complete and live-verified** — search *and* booking confirmed
+end-to-end for all three categories (Campsite, Group, Accommodation). Accommodation
+booking was driven to the payment screen against a real signed-in session (a cabin
+held, no payment) on 2026-06-05; the only difference from a campsite booking is the
+`bookingCategoryId` (0/2/1) and that accommodations send no equipment.
+
+## Booking models 1 (Day Use) & 5 (Backcountry) — read-only recon
+
+From `GET /api/bookingcategories` (bookingCategoryId → bookingModel → name):
+
+- **Model 0** (done): Campsite 0, Accommodation 1, Group 2 — **and also** West Coast
+  Trail 4, Long Range Mountains 13. The last two are model 0, so they likely book
+  through our *existing* flow once their bookingCategoryId is added (worth a quick
+  verify — potential low-hanging fruit).
+- **Model 1 — Day Use** (`resourceType` 2): Guided Hike 3, Parking 8, Shuttle to
+  Lake Louise & Moraine Lake 9, Lake O'Hara Day Use Bus 10, DayTripper 11, Fishing
+  12, Learn-to 14, Guided Event 15, Chilkoot Day Runner 16. **Time-slot** based
+  (start/end time, ticket quantities); `bookingCategoryId` is **per product/park**,
+  not one value. No equipment, no nights. *Medium* build: new time-slot availability
+  shape + a cart variant. Highest public demand (the Moraine Lake / Lake O'Hara
+  access lottery). Needs ~1 HAR at the booking step.
+- **Model 5 — Backcountry** (`resourceType` 3): Backcountry Campsite 5, Backcountry
+  Zone 7, Chilkoot Trail 17. Built on an **itinerary across zones over multiple
+  nights** (`itineraryBuilderHelper`, `tripValidationHelper`) plus **per-party-member
+  data collection** (`partyMember{Name,Age,Contact,Date,CapacityCategory,Note}
+  CollectionRequirement` — details for *each* person). *High* build: new itinerary
+  model + per-person roster + validation; also touches the identity surface. Smaller
+  user base. Needs 1+ HAR (itinerary build *and* commit).
+
+Recommendation: **Day Use first** — simpler model, far higher demand, cleaner reuse;
+roughly the size of the accommodations work plus a new availability/cart shape.
+Backcountry is ~2–3× that, mostly the itinerary builder + per-member collection.
+
+### Day Use availability endpoints (from SPA `chunk-SEEOSVZU.js`, partly probed live)
+
+Day Use does **not** use `/api/availability/map`. Two endpoints, both with query
+params `resourceLocationId, startDate, endDate, bookingCategoryId` and a JSON body:
+- `POST /api/availability/dailyactivity` — per-day availability list. Body `[]` is
+  accepted (**HTTP 200**, returns a JSON **array**; empty for a date with no
+  availability). This is the day-grid call.
+- `POST /api/availability/activity` — the detailed/slot call; body `[]` returns
+  **HTTP 400**, so it needs a specific request body (the `o` arg — a preferences/
+  selection object not yet captured).
+
+`bookingCategoryId` is **per product** (Lake O'Hara Bus 10, Lake Louise/Moraine
+Shuttle 9, Parking 8, …), and each maps to one day-use facility (e.g. "Yoho - Lake
+O'Hara Bus" rlid `-2147483536`, category Day Use Bus `-2147483626`).
+
+**Verified live:** the catalog comes from `/api/bookingcategories`, but each entry
+carries `bookingCategoryId, bookingModel, name` and **`allowedResourceCategoryIds`** —
+**not** a `resourceLocationId` (an early wrong assumption that broke search until
+fixed). A product's facilities are those whose `resourceCategoryIds` intersect its
+`allowedResourceCategoryIds`; a product can span several facilities and vice-versa, so
+search resolves product↔facility pairs and matches the query against product + facility
+name. A facility's **timed slots are its resources** —
+`GET /api/resourcelocation/resources` returns e.g. "Moraine Lake: 6:30am-7am",
+"Lake Louise: 8am-9am", "…(Last Minute)", "…(Park Use)" (each `maxCapacity` 10).
+The day grid is `POST /api/availability/dailyactivity` with **body = array of slot
+`resourceId`s** and query `resourceLocationId,startDate,endDate,bookingCategoryId`;
+the response is per-slot per-day `availabilityResult.remainingReservableQuota`.
+
+**Day Use SEARCH is built and verified live** (`searchDayUse` + `search_day_use`):
+"Moraine Lake shuttle" for a real date returns the open time slots with spots left.
+("(Park Use)" slots are filtered out as staff/internal.)
+
+**Backcountry search works (verified live).** The `allowedResourceCategoryIds`
+mapping IS correct (a zone facility's zones book under bcid 7, a campsite facility's
+under bcid 5 — the captured booking's bcid 5 was a *different*, campsite facility id).
+The real bug was that **backcountry facilities carry `rootMapId: null` in
+/api/resourceLocation** — their zone maps come from `GET /api/maps?resourceLocationId=`
+(top-level nodes like "Hermit Meadows", "Loop Brook"). Walking those with the
+category-correct bcid returns per-night quota. Verified: Glacier → Hermit Meadows under
+bcid 7 (party 1: 1 spot over 2 nights, matching a captured search). Earlier 0-results
+were genuine (no availability under the correct product) or the skipped null-rootMapId
+facilities. `searchBackcountry` now falls back to `/api/maps` when `rootMapId` is null.
+(WCT bcid 4 and Long Range Mountains bcid 13 appear in the same search as model-0 trail
+products with their own maps — bookable via the model-0 flow, still to wire.)
+
+**Day Use BOOKING is built** (from a second, payment-reaching HAR). The model-1 cart
+differs from model 0 in exactly these ways (our generated cart is a key-for-key match
+to the capture):
+- `booking.bookingModel = 1`, `bookingCategoryId =` the product id (e.g. shuttle 9);
+- `equipmentCategoryId`/`subEquipmentCategoryId` are **null** (no equipment);
+- `checkInTime "10:00"`, `checkOutTime "23:59"` (the full open day), sent every stage;
+- the slot is held by a **`resourceZoneBlocker`** (carrying the slot `resourceId` and
+  `unitsBlocked` = party size) in `cart.resourceZoneBlockers`, referenced by the
+  booking's `resourceZoneBlockerUids`; `resourceBlockers` is empty. The zone-blocker
+  UID is client-generated. Same staged `POST /api/cart/commit` (isCompleted=false),
+  stopping before payment.
+
+Day Use booking is wired into `prepare_booking` (pass `product_id`); **confirmed
+live** — a Moraine Lake shuttle slot was driven to the payment screen against a real
+signed-in session (2026-06-08, no payment). Search→book works end-to-end. (Two bugs
+fixed en route: the catalog has no `resourceLocationId` so facilities resolve via
+`allowedResourceCategoryIds` and the search surfaces the numeric booking ids; and the
+browse-mode routing no longer loops when `end_date` is omitted for a single day.)
+
+## Backcountry (model 5) — read-only recon
+
+Products (from `/api/bookingcategories`): Backcountry Campsite 5, Backcountry Zone 7,
+Chilkoot Trail 17 (West Coast Trail 4 and Long Range Mountains 13 are *model 0* and
+may book via the existing flow — verify-later freebies). 29 facilities carry a
+`resourceType` 3 category; their resources are **zones / trailheads** (e.g. "Emerald
+Lake Trailhead", category Backcountry Zone `-2147483632`) with null capacity/maxStay.
+
+From the SPA, a backcountry booking is a **multi-leg itinerary**: the itinerary
+builder collects, per leg, an **arrival date, departure date, and nights**, chaining
+zones from an entry trailhead (`/api/reachableresources/resourcelocationid` gives the
+zones reachable next). Availability is per-zone per-night quota
+(`/api/availability/map` + `resourcedailyavailability`); the search request object
+(`/api/availability/booking`) carries `accessPointResourceId`, `nights`,
+`peopleCapacityCategoryCounts`. Booking additionally requires **per-party-member data
+collection** (`partyMember{Name,Age,Contact,Date,CapacityCategory,Note}
+CollectionRequirement`).
+
+**Booking cart is built and verified** (from a captured Pacific Rim - Broken Group
+Islands two-night trip; our generated cart is a key-for-key match). The model-5 cart:
+- `bookingModel 5`, `bookingCategoryId` 5/7/17; `checkInTime "12:00"`,
+  `checkOutTime "11:00"`; backcountry equipment category (`-32767`, not `-32768`).
+- The **itinerary is N `resourceBlockers`** — one per night, each a zone held for one
+  day (`resourceId` + start/end), referenced by the booking's `resourceBlockerUids`;
+  the booking spans first-leg start → last-leg end. (`buildBookingCart` takes an
+  `itinerary: [{resourceId,startDate,endDate}]`; legs become blockers.) Each blocker
+  carries `completedDate`/`blockerTransactionStatus` — now added for *all* models, to
+  match the captures exactly.
+
+**Search is built.** Backcountry zone availability works **cart-free** via the same
+`GET /api/availability/map` (walked recursively) with `bookingCategoryId` = the model-5
+product and `equipmentCategoryId` `-32767`. ⚠️ **`availability` is a STATUS code, not a
+quota count** — `0` = available that night (exactly like frontcountry's `openNights`),
+non-zero = not available. (An early reading of it as a count `≥ party` *inverted* the
+result — a full zone returns `1`/`5` and read as "1–5 spots", an open zone returns `0`
+and read as "no room", so search reported phantom availability *and* missed real
+availability. Verified live: Glacier Hermit Meadows full → `1`; Forillon's five open
+zones → `0`, matching the website exactly.) `searchBackcountry`
+matches model-5 products by query (browse with no query), walks each facility's zones,
+and surfaces accessibility first-class (`accessible_only` filter). Backcountry
+facilities aren't in the site-filtered campground list, so root maps resolve via an
+unfiltered `listFacilities()`.
+
+**Booking is wired.** `prepare_booking` takes an `itinerary` (one `{zone_id,
+start_date, end_date}` per night) plus the `product_id`. **The hold kind is per the
+resource's `resourceModel`** (SPA enum: Site=0, NonSpecific=1, Zone=2, AccessPoint=3,
+ZoneEntry=4): a **Site** books a specific unit (`resourceBlocker`); a **Zone** is
+quota-based and books N of a shared capacity (`resourceZoneBlocker` with `unitsBlocked`,
+like Day Use). Using a site blocker on a quota zone is what the platform rejected with
+**`ResourceUnavailable`**. So `prepare_booking` looks up each leg's `resourceModel` and
+routes the hold accordingly:
+- Backcountry **Campsite** (bcid 5): zones are Site-model → per-night `resourceBlocker`,
+  equipment from the zone's `allowedEquipment` (the captured cart).
+- Backcountry **Zone** (bcid 7): a quota-zone **itinerary** (verified against a captured
+  Forillon zone booking). It is an **entry point + per-night zones**:
+  - An **entry point** (`entryPointResourceId`) — a trailhead/parking resource,
+    `resourceModel 3` (AccessPoint), e.g. "Le Portage trailhead". `prepare_booking`
+    auto-uses the facility's single entry point, or lists them and asks if several.
+  - One **`resourceZoneBlocker` per night** for that night's zone (`resourceModel 2`,
+    `unitsBlocked = party`; nights may be different zones), in a **lean** shape: the
+    `newVersion` omits `blockerTransactionStatus`/`completedDate`, AND the top level
+    omits `currentVersion`/`history`/`drafts`/`adminCartUid` (Day Use's zone blocker
+    keeps all of those — the extra fields on the backcountry blocker triggered
+    `InvalidCart`). Only `{blockerType, cartUid, resourceZoneBlockerUid, bookingUid,
+    groupHoldUid, isReservation, newVersion}` remain.
+  - `checkInTime`/`checkOutTime` = **null**; **no equipment**; and an **extra capacity
+    count** keyed by the **product's** `additionalCapacityCategoryId` (constant per product; the zone's own `zoneCapacitySettings.capacityCategoryId` varies per zone and was the wrong source — it produced -32767 for Lean-to Les Lacs and an InvalidCart)
+    (`{capacityCategoryId, subCapacityCategoryId: null, count: party}`), with `isAdult`
+    flags on the four age-band entries.
+
+Same staged commits, stops before payment; prepare-on-demand only (Art. 2.4).
+
+**Backcountry zone booking confirmed live** (Forillon Lean-to Les Lacs driven to the
+payment screen, 2026-06-08) — the last booking family to land. The zone-permit cart is a **key-for-key structural match** to the captured Forillon zone
+booking (booking object, capacity counts, blockers). The one thing still unconfirmed is
+the live authenticated commit on a *different* park (the error progression
+`ResourceUnavailable` → `InvalidCart` → [fixed] tracked the hold-type then the
+entry-point/times/capacity deltas).
+
+⚠️ Known follow-up (separate): `search_day_use` can show slots for dates beyond the
+booking-release window; those fail at commit with `MaxReservationWindowViolated`. The
+window should be surfaced at search time (needs the per-product release schedule).
+
 ## Divergences from camply (camply 0.34.2 is stale for this host)
 
 1. **`/api/resource/details` is GONE → HTTP 404.** This was camply's *only* source

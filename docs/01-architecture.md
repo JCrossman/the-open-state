@@ -2,28 +2,37 @@
 
 Decisions that apply to every milestone. Individual milestone docs assume these.
 
-## Stack (locked)
+## Stack (current)
 
-- **Language:** Python 3.11+
-- **MCP framework:** standalone **FastMCP**, pinned `fastmcp<3` (avoid 3.x breaking changes until we deliberately upgrade).
-- **Upstream data (Parks Canada):** **camply**, imported as a library. Never shell out to its CLI.
-- **Package manager:** **uv**.
-- **Transport:** **stdio** for local (M1). **Streamable HTTP** for remote (M2+). One env-var switch selects the mode; the tool definitions are identical in both. SSE is deprecated; do not use it.
-- **Persistence:** SQLite for local (alerts in M1). For hosted M2+/M3, a managed Postgres (or equivalent) with encryption at rest.
-- **Hosting (M2+):** Azure Container Apps (Canada region), min replicas >= 1 (interactive MCP and the alert poller both break under scale-to-zero).
+- **Language:** **TypeScript** (Node.js). A pnpm monorepo: `packages/core` (the
+  provider, booking-cart assembly, availability logic) and `packages/bundle` (the
+  MCP server, packaged as a `.mcpb` desktop extension).
+  > Historical note: the project began as a Python (FastMCP + uv) implementation and
+  > was rewritten in TypeScript and shipped as a local `.mcpb`. The Python version
+  > (and its Azure remote preview) has been removed; the TS bundle is the implementation.
+- **MCP framework:** the official **`@modelcontextprotocol/sdk`** (`McpServer`).
+- **Upstream data (Parks Canada):** a small **verified client of our own**
+  (`GoingToCampClient`). camply's source was the reference, not a runtime dependency
+  (it's stale for this host).
+- **Package manager:** **pnpm**.
+- **Transport:** **stdio** (the bundle runs locally on the citizen's machine).
+- **Persistence:** local files in `~/.open-state-camping` — the session vault
+  (encrypted at rest) and an alerts JSON file. No identity is stored.
+- **Validation:** **zod** for tool input schemas; **vitest** for tests (offline,
+  fixture-backed).
 
 ## Provider abstraction (the most important structural decision)
 
-Tools must never call camply (or any platform) directly. A provider layer sits between them so a totally different platform (Alberta’s HTML scrape) can be added later without touching tool code.
+Tools must never call a platform's API directly. A provider layer sits between them so a totally different platform (Alberta’s HTML scrape) can be added later without touching tool code.
 
 ```
 AI assistant
    |  (MCP)
 MCP tools          # stable, platform-agnostic
    |
-CampingProvider    # abstract base class
+provider interface
    |
-ParksCanadaProvider (wraps camply)   [M1]
+ParksCanadaProvider (own verified GoingToCamp client)   [built]
 AlbertaParksProvider (HTML scrape)   [M4, do not build until M4]
 ```
 
@@ -74,7 +83,7 @@ Security rules (binding):
 
 ## Upstream politeness
 
-- Respect camply’s polling floor: minimum 5 minutes, default 10. Enforce in code; reject shorter intervals.
+- Respect the upstream polling floor: minimum 5 minutes, default 10. Enforce in code; reject shorter intervals.
 - Jitter polls. Set a realistic, honest User-Agent. Never hammer reservation.pc.gc.ca or shop.albertaparks.ca.
 - Outbound HTTPS verifies certificates against the system/operator CA bundle (`REQUESTS_CA_BUNDLE` / `SSL_CERT_FILE`), falling back to certifi, so the tool works behind a TLS-intercepting corporate or proxy egress. Verification is never disabled - we only broaden the trusted CA set.
 - On launch days both platforms use Queue-it virtual waiting rooms. Do not try to defeat them. Detect a queue response and surface it to the citizen as a clear, typed status.

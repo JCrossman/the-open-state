@@ -1,0 +1,571 @@
+{
+  "cart": {
+    "cartUid": "00000000-0000-0000-0000-000000000001",
+    "createTransactionUid": "00000000-0000-0000-0000-000000000002",
+    "shopperUid": null,
+    "groupUid": null,
+    "referenceNumberPrefix": "INPC26",
+    "referenceNumberSuffix": "+15550000000",
+    "newTransaction": {
+      "cartTransactionUid": "00000000-0000-0000-0000-000000000002",
+      "cartUid": "00000000-0000-0000-0000-000000000000",
+      "completeDate": null,
+      "createDate": "2026-06-02T02:26:56.136Z",
+      "editBookingLock": false,
+      "lastEditDate": "2026-06-02T02:26:56.169Z",
+      "referenceNumberPrefix": "INPC26",
+      "referenceNumberSuffix": "+15550000000",
+      "shiftUid": "00000000-0000-0000-0000-000000000003",
+      "shopperUid": "00000000-0000-0000-0000-000000000004",
+      "status": 1,
+      "terminalLocationId": -2147483647,
+      "transactionBookings": [],
+      "transactionSales": [],
+      "transactionShipments": [],
+      "userUid": "00000000-0000-0000-0000-000000000005"
+    },
+    "transactionDrafts": [],
+    "transactionHistory": [],
+    "giftCards": [],
+    "sales": [],
+    "bookings": [
+      {
+        "bookingUid": "00000000-0000-0000-0000-000000000006",
+        "cartUid": "00000000-0000-0000-0000-000000000001",
+        "bookingCategoryId": 0,
+        "bookingModel": 0,
+        "newVersion": {
+          "cartTransactionUid": "00000000-0000-0000-0000-000000000002",
+          "bookingMembers": [],
+          "bookingVehicles": [],
+          "bookingBoats": [],
+          "bookingCapacityCategoryCounts": [
+            {
+              "capacityCategoryId": -32767,
+              "subCapacityCategoryId": -32768,
+              "count": 1,
+              "isAdult": true
+            },
+            {
+              "capacityCategoryId": -32767,
+              "subCapacityCategoryId": -32767,
+              "count": 0,
+              "isAdult": true
+            },
+            {
+              "capacityCategoryId": -32767,
+              "subCapacityCategoryId": -32766,
+              "count": 0,
+              "isAdult": false
+            },
+            {
+              "capacityCategoryId": -32767,
+              "subCapacityCategoryId": -32765,
+              "count": 0,
+              "isAdult": false
+            }
+          ],
+          "rateCategoryId": -32768,
+          "resourceBlockerUids": [
+            "00000000-0000-0000-0000-000000000007"
+          ],
+          "resourceNonSpecificBlockerUids": [],
+          "resourceZoneBlockerUids": [],
+          "resourceZoneEntryBlockerUids": [],
+          "startDate": "2026-07-22",
+          "endDate": "2026-07-23",
+          "releasePersonalInformation": false,
+          "equipmentCategoryId": -32768,
+          "subEquipmentCategoryId": -32768,
+          "occupant": {
+            "contact": {
+              "email": "",
+              "contactName": "",
+              "phoneNumberCountryCode": null,
+              "phoneNumber": ""
+            },
+            "address": {},
+            "allowMarketing": false,
+            "phoneNumbers": {},
+            "preferredCultureName": "en-CA",
+            "firstName": "Test",
+            "lastName": "Camper"
+          },
+          "requiresCheckout": false,
+          "bookingStatus": 0,
+          "completedDate": "2026-06-02T02:26:56.474Z",
+          "arrivalComment": "",
+          "entryPointResourceId": null,
+          "exitPointResourceId": null,
+          "bookingSurcharges": [],
+          "consentToRelease": false,
+          "equipmentDescription": "",
+          "groupHoldUid": "",
+          "organizationName": "",
+          "passExpiryDate": null,
+          "passNumber": "",
+          "resourceLocationId": -2147483646,
+          "checkInTime": null,
+          "checkOutTime": null,
+          "deferredPayment": false
+        },
+        "createTransactionUid": "00000000-0000-0000-0000-000000000002",
+        "currentVersion": null,
+        "history": [],
+        "drafts": [],
+        "referenceNumberPostfix": ""
+      }
+    ],
+    "shipments": [],
+    "groupHold": null,
+    "paymentGroups": [],
+    "gatewayPaymentSessions": [],
+    "lineItems": [],
+    "resourceBlockers": [
+      {
+        "blockerType": 0,
+        "cartUid": "00000000-0000-0000-0000-000000000001",
+        "resourceBlockerUid": "00000000-0000-0000-0000-000000000007",
+        "bookingUid": "00000000-0000-0000-0000-000000000006",
+        "groupHoldUid": "",
+        "isReservation": true,
+        "newVersion": {
+          "creationDate": "2026-06-02T02:27:35.228Z",
+          "cartTransactionUid": "00000000-0000-0000-0000-000000000002",
+          "startDate": "2026-07-22",
+          "endDate": "2026-07-23",
+          "resourceId": -2147474730,
+          "resourceLocationId": -2147483646,
+          "status": 0
+        }
+      }
+    ],
+    "resourceNonSpecificBlockers": [],
+    "resourceZoneBlockers": [],
+    "resourceZoneEntryBlockers": [],
+    "waitlistApplications": [],
+    "shopper": {
+      "shopperUid": "00000000-0000-0000-0000-000000000004",
+      "currentVersion": {
+        "completedDate": "2026-06-01T23:14:04.447Z",
+        "firstName": "Test",
+        "lastName": "Camper",
+        "email": "test.camper@example.com",
+        "communicationPreferences": [
+          {
+            "channel": 0,
+            "context": 0,
+            "consentGranted": false
+          },
+          {
+            "channel": 1,
+            "context": 1,
+            "consentGranted": false
+          }
+        ],
+        "preferredCultureName": "en-CA",
+        "flaggedStartDate": null,
+        "flaggedEndDate": null,
+        "vehicles": [],
+        "boats": [],
+        "phoneNumbers": {
+          "primaryPhoneNumber": "+15550000000",
+          "primaryCountryCode": "CA",
+          "secondaryPhoneNumber": "+15550000000",
+          "secondaryCountryCode": "CA"
+        },
+        "contact": {
+          "contactName": "",
+          "phoneNumberCountryCode": null,
+          "phoneNumber": "",
+          "email": ""
+        },
+        "addresses": [
+          {
+            "description": null,
+            "unit": null,
+            "streetAddress": "123 Example St.",
+            "city": "Testville",
+            "region": "AB",
+            "regionCode": "A1A1A1",
+            "country": "Canada"
+          }
+        ],
+        "defaultSubEquipmentCategoryId": null,
+        "defaultRateCategoryId": null,
+        "defaultPassNumber": "",
+        "defaultPassExpiryDate": null,
+        "allowedRestrictedRateCategories": [],
+        "disallowedPublicRateCategories": []
+      },
+      "newVersion": null,
+      "history": [
+        {
+          "completedDate": "2026-05-31T21:05:39.733Z",
+          "firstName": "Test",
+          "lastName": "Camper",
+          "email": "test.camper@example.com",
+          "communicationPreferences": [
+            {
+              "channel": 0,
+              "context": 0,
+              "consentGranted": false
+            },
+            {
+              "channel": 1,
+              "context": 1,
+              "consentGranted": false
+            }
+          ],
+          "preferredCultureName": "en-CA",
+          "flaggedStartDate": null,
+          "flaggedEndDate": null,
+          "vehicles": [],
+          "boats": [],
+          "phoneNumbers": {
+            "primaryPhoneNumber": "+15550000000",
+            "primaryCountryCode": "CA",
+            "secondaryPhoneNumber": null,
+            "secondaryCountryCode": null
+          },
+          "contact": {
+            "contactName": "",
+            "phoneNumberCountryCode": null,
+            "phoneNumber": "",
+            "email": ""
+          },
+          "addresses": [
+            {
+              "description": null,
+              "unit": null,
+              "streetAddress": "123 Example St.",
+              "city": "Testville",
+              "region": "AB",
+              "regionCode": "A1A1A1",
+              "country": "Canada"
+            }
+          ],
+          "defaultSubEquipmentCategoryId": null,
+          "defaultRateCategoryId": null,
+          "defaultPassNumber": "",
+          "defaultPassExpiryDate": null,
+          "allowedRestrictedRateCategories": [],
+          "disallowedPublicRateCategories": []
+        },
+        {
+          "completedDate": "2026-05-31T21:06:19.253Z",
+          "firstName": "Test",
+          "lastName": "Camper",
+          "email": "test.camper@example.com",
+          "communicationPreferences": [
+            {
+              "channel": 0,
+              "context": 0,
+              "consentGranted": false
+            },
+            {
+              "channel": 1,
+              "context": 1,
+              "consentGranted": false
+            }
+          ],
+          "preferredCultureName": "en-CA",
+          "flaggedStartDate": null,
+          "flaggedEndDate": null,
+          "vehicles": [],
+          "boats": [],
+          "phoneNumbers": {
+            "primaryPhoneNumber": "+15550000000",
+            "primaryCountryCode": "CA",
+            "secondaryPhoneNumber": null,
+            "secondaryCountryCode": null
+          },
+          "contact": {
+            "contactName": "",
+            "phoneNumberCountryCode": null,
+            "phoneNumber": "",
+            "email": ""
+          },
+          "addresses": [
+            {
+              "description": null,
+              "unit": null,
+              "streetAddress": "123 Example St.",
+              "city": "Testville",
+              "region": "AB",
+              "regionCode": "A1A1A1",
+              "country": "Canada"
+            }
+          ],
+          "defaultSubEquipmentCategoryId": null,
+          "defaultRateCategoryId": null,
+          "defaultPassNumber": "",
+          "defaultPassExpiryDate": null,
+          "allowedRestrictedRateCategories": [],
+          "disallowedPublicRateCategories": []
+        },
+        {
+          "completedDate": "2026-06-01T22:13:32.630Z",
+          "firstName": "Test",
+          "lastName": "Camper",
+          "email": "test.camper@example.com",
+          "communicationPreferences": [
+            {
+              "channel": 0,
+              "context": 0,
+              "consentGranted": false
+            },
+            {
+              "channel": 1,
+              "context": 1,
+              "consentGranted": false
+            }
+          ],
+          "preferredCultureName": "en-CA",
+          "flaggedStartDate": null,
+          "flaggedEndDate": null,
+          "vehicles": [],
+          "boats": [],
+          "phoneNumbers": {
+            "primaryPhoneNumber": "+15550000000",
+            "primaryCountryCode": "CA",
+            "secondaryPhoneNumber": "+15550000000",
+            "secondaryCountryCode": "CA"
+          },
+          "contact": {
+            "contactName": "",
+            "phoneNumberCountryCode": null,
+            "phoneNumber": "",
+            "email": ""
+          },
+          "addresses": [
+            {
+              "description": null,
+              "unit": null,
+              "streetAddress": "123 Example St.",
+              "city": "Testville",
+              "region": "AB",
+              "regionCode": "A1A1A1",
+              "country": "Canada"
+            }
+          ],
+          "defaultSubEquipmentCategoryId": null,
+          "defaultRateCategoryId": null,
+          "defaultPassNumber": "",
+          "defaultPassExpiryDate": null,
+          "allowedRestrictedRateCategories": [],
+          "disallowedPublicRateCategories": []
+        },
+        {
+          "completedDate": "2026-06-01T23:11:51.967Z",
+          "firstName": "Test",
+          "lastName": "Camper",
+          "email": "test.camper@example.com",
+          "communicationPreferences": [
+            {
+              "channel": 0,
+              "context": 0,
+              "consentGranted": false
+            },
+            {
+              "channel": 1,
+              "context": 1,
+              "consentGranted": false
+            }
+          ],
+          "preferredCultureName": "en-CA",
+          "flaggedStartDate": null,
+          "flaggedEndDate": null,
+          "vehicles": [],
+          "boats": [],
+          "phoneNumbers": {
+            "primaryPhoneNumber": "+15550000000",
+            "primaryCountryCode": "CA",
+            "secondaryPhoneNumber": "+15550000000",
+            "secondaryCountryCode": "CA"
+          },
+          "contact": {
+            "contactName": "",
+            "phoneNumberCountryCode": null,
+            "phoneNumber": "",
+            "email": ""
+          },
+          "addresses": [
+            {
+              "description": null,
+              "unit": null,
+              "streetAddress": "123 Example St.",
+              "city": "Testville",
+              "region": "AB",
+              "regionCode": "A1A1A1",
+              "country": "Canada"
+            }
+          ],
+          "defaultSubEquipmentCategoryId": null,
+          "defaultRateCategoryId": null,
+          "defaultPassNumber": "",
+          "defaultPassExpiryDate": null,
+          "allowedRestrictedRateCategories": [],
+          "disallowedPublicRateCategories": []
+        },
+        {
+          "completedDate": "2026-06-01T23:12:33.680Z",
+          "firstName": "Test",
+          "lastName": "Camper",
+          "email": "test.camper@example.com",
+          "communicationPreferences": [
+            {
+              "channel": 0,
+              "context": 0,
+              "consentGranted": false
+            },
+            {
+              "channel": 1,
+              "context": 1,
+              "consentGranted": false
+            }
+          ],
+          "preferredCultureName": "en-CA",
+          "flaggedStartDate": null,
+          "flaggedEndDate": null,
+          "vehicles": [],
+          "boats": [],
+          "phoneNumbers": {
+            "primaryPhoneNumber": "+15550000000",
+            "primaryCountryCode": "CA",
+            "secondaryPhoneNumber": "+15550000000",
+            "secondaryCountryCode": "CA"
+          },
+          "contact": {
+            "contactName": "",
+            "phoneNumberCountryCode": null,
+            "phoneNumber": "",
+            "email": ""
+          },
+          "addresses": [
+            {
+              "description": null,
+              "unit": null,
+              "streetAddress": "123 Example St.",
+              "city": "Testville",
+              "region": "AB",
+              "regionCode": "A1A1A1",
+              "country": "Canada"
+            }
+          ],
+          "defaultSubEquipmentCategoryId": null,
+          "defaultRateCategoryId": null,
+          "defaultPassNumber": "",
+          "defaultPassExpiryDate": null,
+          "allowedRestrictedRateCategories": [],
+          "disallowedPublicRateCategories": []
+        },
+        {
+          "completedDate": "2026-06-01T23:13:26.727Z",
+          "firstName": "Test",
+          "lastName": "Camper",
+          "email": "test.camper@example.com",
+          "communicationPreferences": [
+            {
+              "channel": 0,
+              "context": 0,
+              "consentGranted": false
+            },
+            {
+              "channel": 1,
+              "context": 1,
+              "consentGranted": false
+            }
+          ],
+          "preferredCultureName": "en-CA",
+          "flaggedStartDate": null,
+          "flaggedEndDate": null,
+          "vehicles": [],
+          "boats": [],
+          "phoneNumbers": {
+            "primaryPhoneNumber": "+15550000000",
+            "primaryCountryCode": "CA",
+            "secondaryPhoneNumber": "+15550000000",
+            "secondaryCountryCode": "CA"
+          },
+          "contact": {
+            "contactName": "",
+            "phoneNumberCountryCode": null,
+            "phoneNumber": "",
+            "email": ""
+          },
+          "addresses": [
+            {
+              "description": null,
+              "unit": null,
+              "streetAddress": "123 Example St.",
+              "city": "Testville",
+              "region": "AB",
+              "regionCode": "A1A1A1",
+              "country": "Canada"
+            }
+          ],
+          "defaultSubEquipmentCategoryId": null,
+          "defaultRateCategoryId": null,
+          "defaultPassNumber": "",
+          "defaultPassExpiryDate": null,
+          "allowedRestrictedRateCategories": [],
+          "disallowedPublicRateCategories": []
+        },
+        {
+          "completedDate": "2026-06-01T23:14:04.447Z",
+          "firstName": "Test",
+          "lastName": "Camper",
+          "email": "test.camper@example.com",
+          "communicationPreferences": [
+            {
+              "channel": 0,
+              "context": 0,
+              "consentGranted": false
+            },
+            {
+              "channel": 1,
+              "context": 1,
+              "consentGranted": false
+            }
+          ],
+          "preferredCultureName": "en-CA",
+          "flaggedStartDate": null,
+          "flaggedEndDate": null,
+          "vehicles": [],
+          "boats": [],
+          "phoneNumbers": {
+            "primaryPhoneNumber": "+15550000000",
+            "primaryCountryCode": "CA",
+            "secondaryPhoneNumber": "+15550000000",
+            "secondaryCountryCode": "CA"
+          },
+          "contact": {
+            "contactName": "",
+            "phoneNumberCountryCode": null,
+            "phoneNumber": "",
+            "email": ""
+          },
+          "addresses": [
+            {
+              "description": null,
+              "unit": null,
+              "streetAddress": "123 Example St.",
+              "city": "Testville",
+              "region": "AB",
+              "regionCode": "A1A1A1",
+              "country": "Canada"
+            }
+          ],
+          "defaultSubEquipmentCategoryId": null,
+          "defaultRateCategoryId": null,
+          "defaultPassNumber": "",
+          "defaultPassExpiryDate": null,
+          "allowedRestrictedRateCategories": [],
+          "disallowedPublicRateCategories": []
+        }
+      ],
+      "hasWebAccount": true
+    }
+  }
+}

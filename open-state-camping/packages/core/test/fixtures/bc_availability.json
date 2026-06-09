@@ -1,0 +1,9 @@
+{
+  "mapId": -2147480001,
+  "mapAvailabilities": {},
+  "resourceAvailabilities": {
+    "-2147480010": [{ "availability": 0 }, { "availability": 0 }],
+    "-2147480011": [{ "availability": 0 }, { "availability": 5 }]
+  },
+  "mapLinkAvailabilities": {}
+}

@@ -1,15 +1,23 @@
-# Python / uv
-.venv/
+# Node / pnpm
+node_modules/
+*.tsbuildinfo
+
+# .mcpb build staging + packaged bundles (build artifacts)
+.mcpb-build/
+*.mcpb
+
+# Local encrypted session vault + alerts file (never commit citizen material)
+.open-state-camping/
+
+# Build output
+dist/
+
+# Live capture artifacts (HAR with session cookies / PII) - never commit
+docs/captures/
+*.har
+
+# Python artifacts (legacy)
 __pycache__/
 *.py[cod]
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
-build/
-dist/
-*.egg-info/
-
-# Local SQLite alert store (M1) - never commit citizen-adjacent data
 *.db
-*.sqlite
-*.sqlite3
+*.sqlite*

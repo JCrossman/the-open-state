@@ -1,0 +1,14 @@
+{
+  "-2147480010": {
+    "resourceId": -2147480010,
+    "resourceCategoryId": -2147483632,
+    "localizedValues": [{ "cultureName": "en-CA", "name": "Hand Island" }],
+    "definedAttributes": [{ "attributeDefinitionId": -32756, "values": [0] }]
+  },
+  "-2147480011": {
+    "resourceId": -2147480011,
+    "resourceCategoryId": -2147483632,
+    "localizedValues": [{ "cultureName": "en-CA", "name": "Turret Island" }],
+    "definedAttributes": [{ "attributeDefinitionId": -32756, "values": [1] }]
+  }
+}

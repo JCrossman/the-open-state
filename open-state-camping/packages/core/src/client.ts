@@ -1,0 +1,609 @@
+/**
+ * Thin HTTP client for the GoingToCamp / Camis platform (Parks Canada).
+ *
+ * Implements the endpoint contract verified live in
+ * docs/parks-canada-api-findings.md. This client only *reads* public availability
+ * and resource data and *builds* a booking deep link; it never logs in, books, or
+ * handles citizen credentials (Constitution Articles 1 and 2).
+ */
+import type { ISODate } from "./types.js";
+import {
+  ACCESSIBLE_ATTR,
+  ALL_SITE_CATEGORIES,
+  DEFAULT_USER_AGENT,
+  MAX_MAP_REQUESTS,
+  NON_GROUP_EQUIPMENT,
+} from "./constants.js";
+import { QueueItError, UpstreamError } from "./errors.js";
+import { localized } from "./util.js";
+
+/** A `fetch`-shaped function, injectable so tests run fully offline. */
+export type FetchLike = typeof fetch;
+
+export interface CampgroundRecord {
+  resourceLocationId: number | string;
+  name: string;
+  rootMapId: number | string;
+  /** Resource categories this facility offers (from `facility.resourceCategoryIds`). */
+  offeredCategoryIds: number[];
+}
+
+/** Resource category metadata: display name + `resourceType` (0 site, 2 day-use, 3 backcountry). */
+export interface ResourceCategoryInfo {
+  name: string;
+  resourceType?: number;
+}
+
+export interface EquipmentRecord {
+  equipmentId: number;
+  name: string;
+}
+
+/** Per-day availability code list, keyed by `resourceId`. */
+export type DailyAvailability = Record<string, (number | null)[]>;
+
+/** A bookable product/tab (e.g. a specific shuttle, parking lot, backcountry area). */
+export interface BookingCategoryRecord {
+  bookingCategoryId: number;
+  bookingModel: number;
+  /** Resource categories this product covers; facilities offering any of them are
+   *  this product's facilities (the catalog carries no resourceLocationId). */
+  allowedResourceCategoryIds: number[];
+  /** The product's extra capacity category — the zone-permit cart's 5th capacity count
+   *  is keyed by this (NOT the zone's own zoneCapacitySettings). */
+  additionalCapacityCategoryId?: number;
+  name: string;
+}
+
+/** Day-use availability: per timed-slot resource, per day, the remaining quota. */
+export interface DayUseSlotAvailability {
+  resourceId: string;
+  date: ISODate;
+  remainingQuota: number;
+}
+
+export class GoingToCampClient {
+  private readonly base: string;
+  private readonly headers: Record<string, string>;
+  private readonly timeoutMs: number;
+  private readonly fetchFn: FetchLike;
+  /**
+   * Returns the citizen's auth headers (e.g. `Cookie` and the Angular
+   * `X-XSRF-TOKEN` echo) for the current session, or undefined when not
+   * connected. Read per-request so a session captured after construction takes
+   * effect immediately. These never leave this client (Constitution 1.5).
+   */
+  private readonly authHeaders?: () => Record<string, string> | undefined;
+
+  constructor(opts: {
+    hostname: string;
+    userAgent?: string;
+    timeoutMs?: number;
+    fetchFn?: FetchLike;
+    authHeaders?: () => Record<string, string> | undefined;
+  }) {
+    this.base = `https://${opts.hostname}`;
+    this.timeoutMs = opts.timeoutMs ?? 30_000;
+    this.fetchFn = opts.fetchFn ?? fetch;
+    this.authHeaders = opts.authHeaders;
+    this.headers = {
+      "User-Agent": opts.userAgent ?? DEFAULT_USER_AGENT,
+      Accept: "application/json, text/plain, */*",
+      "Accept-Language": "en-CA,en;q=0.9",
+      "app-language": "en-CA",
+      // The browser sends Origin/Referer on every XHR; some anti-forgery/WAF
+      // rules reject a write that's missing Origin. Node's fetch won't set it
+      // for us, so we set it explicitly.
+      Origin: this.base,
+      Referer: `${this.base}/`,
+    };
+  }
+
+  /** Per-request headers, adding the citizen's session auth when connected. */
+  private requestHeaders(): Record<string, string> {
+    const auth = this.authHeaders?.();
+    return auth ? { ...this.headers, ...auth } : this.headers;
+  }
+
+  // -- low-level ------------------------------------------------------------
+
+  private async get(
+    path: string,
+    params?: Record<string, unknown>,
+  ): Promise<unknown> {
+    const url = new URL(this.base + path);
+    if (params) {
+      for (const [k, v] of Object.entries(params)) {
+        if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
+      }
+    }
+    let resp: Response;
+    try {
+      resp = await this.fetchFn(url.toString(), {
+        headers: this.requestHeaders(),
+        redirect: "follow",
+        signal: AbortSignal.timeout(this.timeoutMs),
+      });
+    } catch (exc) {
+      throw new UpstreamError(
+        `Could not reach the Parks Canada booking system (${String(exc)}).`,
+      );
+    }
+    // Queue-it sends the browser to a *.queue-it.net waiting room.
+    if (resp.url.includes("queue-it.net")) {
+      throw new QueueItError(
+        "Parks Canada is using a virtual waiting room right now. " +
+          "Please try again shortly.",
+      );
+    }
+    if (resp.status >= 400) {
+      throw new UpstreamError(await describeError(resp, path));
+    }
+    try {
+      return await resp.json();
+    } catch {
+      throw new UpstreamError(
+        `The Parks Canada booking system returned an unexpected ` +
+          `response for ${path}.`,
+      );
+    }
+  }
+
+  /**
+   * Authenticated POST with the citizen's session (Cookie + X-XSRF-TOKEN). Used
+   * for state-changing actions the citizen has confirmed (profile update, and
+   * later the booking cart). Never called without an explicit citizen go-ahead
+   * at the tool layer (Constitution Art. 2).
+   */
+  private async post(path: string, body: unknown): Promise<unknown> {
+    let resp: Response;
+    try {
+      resp = await this.fetchFn(this.base + path, {
+        method: "POST",
+        headers: { ...this.requestHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        redirect: "follow",
+        signal: AbortSignal.timeout(this.timeoutMs),
+      });
+    } catch (exc) {
+      throw new UpstreamError(
+        `Could not reach the Parks Canada booking system (${String(exc)}).`,
+      );
+    }
+    if (resp.url.includes("queue-it.net")) {
+      throw new QueueItError(
+        "Parks Canada is using a virtual waiting room right now. " +
+          "Please try again shortly.",
+      );
+    }
+    if (resp.status >= 400) {
+      throw new UpstreamError(await describeError(resp, path));
+    }
+    // A successful write may return JSON, or an empty body — both are fine.
+    try {
+      return await resp.json();
+    } catch {
+      return null;
+    }
+  }
+
+  // -- endpoints ------------------------------------------------------------
+
+  /** Every facility (resourceLocation), unfiltered — campgrounds, backcountry,
+   *  day-use, all of it. Backcountry/day-use facilities aren't "campgrounds" but
+   *  still need their `rootMapId` resolved for availability. */
+  async listFacilities(): Promise<CampgroundRecord[]> {
+    const data = (await this.get("/api/resourceLocation")) as
+      | Array<Record<string, any>>
+      | null;
+    return (data ?? []).map((facility) => ({
+      resourceLocationId: facility["resourceLocationId"],
+      name: (localized(facility["localizedValues"], "fullName") as string) ?? "",
+      rootMapId: facility["rootMapId"],
+      offeredCategoryIds: facility["resourceCategoryIds"] ?? [],
+    }));
+  }
+
+  /** Reservable campgrounds: the facilities that offer a model-0 site category. */
+  async listCampgrounds(): Promise<CampgroundRecord[]> {
+    return (await this.listFacilities()).filter((f) =>
+      f.offeredCategoryIds.some((c) => ALL_SITE_CATEGORIES.has(c)),
+    );
+  }
+
+  /** Top-level map ids for a facility (from `/api/maps`). Backcountry facilities
+   *  carry no `rootMapId` in /api/resourceLocation — their zone maps live here. */
+  async listFacilityRootMaps(resourceLocationId: number | string): Promise<Array<number | string>> {
+    const data = (await this.get("/api/maps", {
+      resourceLocationId: String(resourceLocationId),
+    })) as Array<Record<string, any>> | null;
+    const nodes = data ?? [];
+    const roots = nodes.filter((m) => m["parentMap"] == null).map((m) => m["mapId"]);
+    return (roots.length > 0 ? roots : nodes.map((m) => m["mapId"])).filter((id) => id != null);
+  }
+
+  /** Resource categories: `resourceCategoryId` → name + `resourceType` (Campsite,
+   *  oTENTik, Cabin, Group, …). Lets search label sites and classify offerings. */
+  async listResourceCategories(): Promise<Map<number, ResourceCategoryInfo>> {
+    const data = (await this.get("/api/resourcecategory")) as
+      | Array<Record<string, any>>
+      | null;
+    const out = new Map<number, ResourceCategoryInfo>();
+    for (const c of data ?? []) {
+      const id = c["resourceCategoryId"];
+      const name = localized(c["localizedValues"], "name") as string | undefined;
+      if (typeof id === "number" && name) {
+        out.set(id, { name, resourceType: c["resourceType"] });
+      }
+    }
+    return out;
+  }
+
+  /** All bookable products/tabs (campsites, shuttles, parking, backcountry, …) with
+   *  their model + covered resource categories. The Day Use and Backcountry catalogs
+   *  live here (bookingModel 1 and 5); facilities are resolved from
+   *  `allowedResourceCategoryIds` (the catalog carries no resourceLocationId). */
+  async listBookingCategories(): Promise<BookingCategoryRecord[]> {
+    const data = (await this.get("/api/bookingcategories")) as
+      | Array<Record<string, any>>
+      | null;
+    const out: BookingCategoryRecord[] = [];
+    for (const c of data ?? []) {
+      const id = c["bookingCategoryId"];
+      if (typeof id !== "number") continue;
+      out.push({
+        bookingCategoryId: id,
+        bookingModel: c["bookingModel"],
+        allowedResourceCategoryIds: c["allowedResourceCategoryIds"] ?? [],
+        additionalCapacityCategoryId: c["additionalCapacityCategoryId"] ?? undefined,
+        name: (localized(c["localizedValues"], "name") as string) ?? "",
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Day-use (time-slot) availability. POST the slot `resourceId`s as the body, with
+   * the facility + dates + product `bookingCategoryId` as query params; the platform
+   * returns the remaining reservable quota per slot per day. (Verified against a
+   * captured Moraine Lake / Lake Louise shuttle session.)
+   */
+  async dayUseAvailability(opts: {
+    resourceLocationId: number | string;
+    resourceIds: Array<number | string>;
+    startDate: ISODate;
+    endDate: ISODate;
+    bookingCategoryId: number;
+  }): Promise<DayUseSlotAvailability[]> {
+    const params = new URLSearchParams({
+      resourceLocationId: String(opts.resourceLocationId),
+      startDate: opts.startDate,
+      endDate: opts.endDate,
+      bookingCategoryId: String(opts.bookingCategoryId),
+    });
+    const body = opts.resourceIds.map((id) => Number(id));
+    const data = (await this.post(
+      `/api/availability/dailyactivity?${params.toString()}`,
+      body,
+    )) as Array<Record<string, any>> | null;
+    const out: DayUseSlotAvailability[] = [];
+    for (const row of data ?? []) {
+      const ar = (row["availabilityResult"] ?? {}) as Record<string, any>;
+      const start = (row["range"]?.["start"] ?? ar["startDate"]) as string | undefined;
+      if (start == null) continue;
+      out.push({
+        resourceId: String(row["resourceId"] ?? ar["resourceId"]),
+        date: start.slice(0, 10),
+        remainingQuota: Number(ar["remainingReservableQuota"] ?? 0),
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Frontcountry equipment types: per-area `subEquipmentCategoryId` + name.
+   *
+   * `/api/equipment` returns two categories — the frontcountry "Equipment"
+   * category (`NON_GROUP_EQUIPMENT`, e.g. Small/Medium/Large Tent, Van, Trailers)
+   * and a separate "Backcountry" category (Single Tent, 2 Tents, …). This tool
+   * searches **frontcountry** campsites and always queries availability with the
+   * frontcountry `equipmentCategoryId`, so we only surface that category's types.
+   * Listing the backcountry types would let a frontcountry search be filtered by a
+   * sub-type no frontcountry site uses, yielding a misleading "nothing available".
+   */
+  async listEquipmentTypes(): Promise<EquipmentRecord[]> {
+    const data = (await this.get("/api/equipment")) as
+      | Array<Record<string, any>>
+      | null;
+    const out: EquipmentRecord[] = [];
+    for (const category of data ?? []) {
+      if (category["equipmentCategoryId"] !== NON_GROUP_EQUIPMENT) continue;
+      for (const sub of category["subEquipmentCategories"] ?? []) {
+        out.push({
+          equipmentId: sub["subEquipmentCategoryId"],
+          name: (localized(sub["localizedValues"], "name") as string) ?? "",
+        });
+      }
+    }
+    return out;
+  }
+
+  /** Resource collection for a campground, keyed by `resourceId`. */
+  async getResources(
+    resourceLocationId: number | string,
+  ): Promise<Record<string, Record<string, any>>> {
+    const data = (await this.get("/api/resourcelocation/resources", {
+      resourceLocationId,
+    })) as unknown;
+    if (data && typeof data === "object" && !Array.isArray(data)) {
+      return Object.fromEntries(
+        Object.entries(data as Record<string, any>).map(([k, v]) => [String(k), v]),
+      );
+    }
+    const out: Record<string, Record<string, any>> = {};
+    for (const r of (data as Array<Record<string, any>>) ?? []) {
+      out[String(r["resourceId"])] = r;
+    }
+    return out;
+  }
+
+  /** Filterable attribute dictionary, keyed by attribute id (string). */
+  async attributeDefinitions(): Promise<Record<string, any>> {
+    const data = (await this.get("/api/attribute/filterable")) as unknown;
+    return data && typeof data === "object" ? (data as Record<string, any>) : {};
+  }
+
+  /**
+   * The signed-in citizen's account info (authenticated). Returns the JSON when
+   * connected, or null when the call is unauthenticated/empty. Used to verify a
+   * captured session is live.
+   */
+  async getUserInfo(): Promise<Record<string, any> | null> {
+    const data = (await this.get("/api/account/userInfo")) as unknown;
+    return data && typeof data === "object" ? (data as Record<string, any>) : null;
+  }
+
+  /** The signed-in citizen's reservations/bookings (authenticated). */
+  async getMyBookings(): Promise<unknown> {
+    return this.get("/api/shopper/allbookings");
+  }
+
+  /**
+   * The citizen's full shopper profile — phone, address, language, vehicles.
+   * GET /api/shopper wraps the profile: `{ shopperUid, currentVersion: {…the
+   * profile…}, history, … }`. We return `currentVersion` (the flat profile that
+   * POST /api/shopper also expects), so reads and updates work on the same shape.
+   */
+  async getShopper(): Promise<Record<string, any> | null> {
+    const data = (await this.get("/api/shopper")) as unknown;
+    if (!data || typeof data !== "object") return null;
+    const obj = data as Record<string, any>;
+    const cv = obj["currentVersion"];
+    return cv && typeof cv === "object" ? (cv as Record<string, any>) : obj;
+  }
+
+  /**
+   * Update the citizen's shopper profile. The caller passes the full profile
+   * (read via getShopper, then modified) so server-managed fields are
+   * preserved. State-changing — only after the citizen confirms (Art. 2).
+   */
+  async updateShopper(profile: Record<string, any>): Promise<unknown> {
+    return this.post("/api/shopper", profile);
+  }
+
+  /**
+   * The raw `GET /api/shopper` envelope — `{ shopperUid, currentVersion, history,
+   * hasWebAccount, … }` — as the platform returns it. `getShopper()` unwraps this
+   * to the flat profile for reads/updates; the booking cart needs the whole
+   * envelope threaded back into `cart.shopper`, so we expose it unmodified here.
+   */
+  async getShopperEnvelope(): Promise<Record<string, any> | null> {
+    const data = (await this.get("/api/shopper")) as unknown;
+    return data && typeof data === "object" ? (data as Record<string, any>) : null;
+  }
+
+  /**
+   * Get a fresh cart from the platform. `GET /api/cart` returns a cart whose
+   * `cartUid` the **server** generates — the booking flow needs this server id
+   * (a client-minted one is rejected). Mirrors the SPA's `initializeNewCart`.
+   */
+  async getNewCart(): Promise<Record<string, any>> {
+    const data = (await this.get("/api/cart")) as unknown;
+    if (!data || typeof data !== "object") {
+      throw new UpstreamError("The Parks Canada booking system did not start a cart.");
+    }
+    return data as Record<string, any>;
+  }
+
+  /**
+   * Start a new cart transaction for a server-issued `cartUid` (from getNewCart).
+   * The platform initializes the transaction server-side (assigning
+   * `cartTransactionUid`, `shiftUid`, `userUid`, `referenceNumberPrefix`, the
+   * online terminal id, …) and returns the cart skeleton. The booking is then
+   * added to *this* real cart and committed —
+   * fabricating the transaction ourselves is rejected with a bare HTTP 400.
+   * Mirrors the SPA's `initializeNewCartTransaction` (GET /api/cart/newtransaction).
+   */
+  async newCartTransaction(cartUid: string): Promise<Record<string, any>> {
+    const data = (await this.get("/api/cart/newtransaction", { cartUid })) as unknown;
+    if (!data || typeof data !== "object") {
+      throw new UpstreamError(
+        "The Parks Canada booking system did not start a cart transaction.",
+      );
+    }
+    return data as Record<string, any>;
+  }
+
+  /** Read a cart back by its ids — used to confirm a commit actually landed. */
+  async getCart(cartUid: string, cartTransactionUid: string): Promise<Record<string, any> | null> {
+    const data = (await this.get("/api/cart/get", { cartUid, cartTransactionUid })) as unknown;
+    return data && typeof data === "object" ? (data as Record<string, any>) : null;
+  }
+
+  /**
+   * Commit a booking cart. The wizard re-commits the whole cart object at each
+   * step; `isCompleted=false` advances toward (but never past) payment — payment
+   * is a separate, citizen-driven step we never automate (Constitution Art. 2).
+   * State-changing — only after the citizen confirms.
+   */
+  async commitCart(
+    cart: { cart: Record<string, any> },
+    opts: { isCompleted?: boolean; isSelfCheckIn?: boolean } = {},
+  ): Promise<unknown> {
+    const params = new URLSearchParams({
+      isCompleted: String(opts.isCompleted ?? false),
+      isSelfCheckIn: String(opts.isSelfCheckIn ?? false),
+    });
+    return this.post(`/api/cart/commit?${params.toString()}`, cart);
+  }
+
+  /**
+   * Per-day availability for each site over the stay window. Walks the
+   * campground's map tree (root → child maps); one request per map, never more
+   * than the loop guard. Read-only.
+   */
+  async dailyAvailability(opts: {
+    rootMapId: number | string;
+    resourceLocationId: number | string;
+    startDate: ISODate;
+    endDate: ISODate;
+    equipmentId?: number | null;
+    bookingCategoryId?: number;
+    equipmentCategoryId?: number;
+  }): Promise<DailyAvailability> {
+    const result: DailyAvailability = {};
+    const visited = new Set<string>();
+    const toVisit: string[] = [String(opts.rootMapId)];
+    let requests = 0;
+
+    while (toVisit.length > 0) {
+      const mapId = toVisit.pop()!;
+      if (visited.has(mapId)) continue;
+      visited.add(mapId);
+      requests += 1;
+      if (requests > MAX_MAP_REQUESTS) break;
+
+      const data = (await this.get(
+        "/api/availability/map",
+        availabilityParams(
+          mapId,
+          opts.resourceLocationId,
+          opts.startDate,
+          opts.endDate,
+          opts.equipmentId ?? null,
+          opts.bookingCategoryId ?? 0,
+          opts.equipmentCategoryId ?? NON_GROUP_EQUIPMENT,
+        ),
+      )) as Record<string, any>;
+
+      const resourceAvail = (data["resourceAvailabilities"] ?? {}) as Record<
+        string,
+        Array<{ availability?: number | null }> | null
+      >;
+      for (const [resourceId, slots] of Object.entries(resourceAvail)) {
+        result[String(resourceId)] = (slots ?? []).map((s) => s?.availability ?? null);
+      }
+      for (const childMapId of Object.keys(data["mapLinkAvailabilities"] ?? {})) {
+        if (!visited.has(String(childMapId))) toVisit.push(String(childMapId));
+      }
+    }
+    return result;
+  }
+
+  /** Build the campground-level deep link the citizen opens to book. */
+  buildBookingUrl(opts: {
+    mapId: number | string;
+    resourceLocationId: number | string;
+    startDate: ISODate;
+    endDate: ISODate;
+    partySize: number;
+    equipmentId?: number | null;
+  }): string {
+    const subEquipment = opts.equipmentId == null ? "" : opts.equipmentId;
+    return (
+      `${this.base}/create-booking/results` +
+      `?mapId=${opts.mapId}` +
+      "&bookingCategoryId=0" +
+      `&startDate=${opts.startDate}` +
+      `&endDate=${opts.endDate}` +
+      "&isReserving=true" +
+      `&equipmentId=${NON_GROUP_EQUIPMENT}` +
+      `&subEquipmentId=${subEquipment}` +
+      `&partySize=${opts.partySize}` +
+      `&resourceLocationId=${opts.resourceLocationId}`
+    );
+  }
+
+  /** Best-effort image fetch, restricted to this platform's own host (SSRF guard). */
+  async fetchImage(url: string): Promise<{ bytes: Uint8Array; contentType: string } | null> {
+    if (!url.startsWith("https://")) return null;
+    if (!url.startsWith(this.base + "/")) return null;
+    let resp: Response;
+    try {
+      resp = await this.fetchFn(url, {
+        headers: this.requestHeaders(),
+        signal: AbortSignal.timeout(this.timeoutMs),
+      });
+    } catch {
+      return null;
+    }
+    if (!resp.ok) return null;
+    const contentType = resp.headers.get("content-type") ?? "";
+    const bytes = new Uint8Array(await resp.arrayBuffer());
+    return { bytes, contentType };
+  }
+}
+
+function availabilityParams(
+  mapId: number | string,
+  resourceLocationId: number | string,
+  startDate: ISODate,
+  endDate: ISODate,
+  equipmentId: number | null,
+  bookingCategoryId: number,
+  equipmentCategoryId: number,
+): Record<string, unknown> {
+  const params: Record<string, unknown> = {
+    mapId,
+    resourceLocationId,
+    bookingCategoryId,
+    equipmentCategoryId,
+    startDate,
+    endDate,
+    getDailyAvailability: "true",
+    isReserving: "true",
+    filterData: "[]",
+    numEquipment: 1,
+  };
+  if (equipmentId != null) params["subEquipmentCategoryId"] = equipmentId;
+  return params;
+}
+
+/** Build an UpstreamError that includes the platform's response body (e.g. the
+ *  ASP.NET validation message naming the bad field), which is essential for
+ *  diagnosing 400s. The body holds no secrets — just the error detail. */
+async function describeError(resp: Response, path: string): Promise<string> {
+  let detail = "";
+  try {
+    detail = (await resp.text()).trim().slice(0, 500);
+  } catch {
+    /* body unreadable */
+  }
+  return (
+    `The Parks Canada booking system returned an error (HTTP ${resp.status}) ` +
+    `for ${path}.` +
+    (detail ? ` Details: ${detail}` : "")
+  );
+}
+
+/** Return true if a resource record is marked accessible (attribute -32756 = 0). */
+export function resourceIsAccessible(resource: Record<string, any>): boolean {
+  for (const attribute of resource["definedAttributes"] ?? []) {
+    if (attribute["attributeDefinitionId"] === ACCESSIBLE_ATTR) {
+      let values: number[] | undefined = attribute["values"];
+      if (values == null && attribute["value"] != null) values = [attribute["value"]];
+        return (values ?? []).includes(0);
+    }
+  }
+  return false;
+}

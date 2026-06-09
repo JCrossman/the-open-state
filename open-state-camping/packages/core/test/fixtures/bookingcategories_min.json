@@ -1,0 +1,68 @@
+[
+  {
+    "bookingCategoryId": 9,
+    "bookingModel": 1,
+    "allowedResourceCategoryIds": [
+      -2147483627
+    ],
+    "localizedValues": [
+      {
+        "cultureName": "en-CA",
+        "name": "Shuttle to Lake Louise and Moraine Lake"
+      }
+    ]
+  },
+  {
+    "bookingCategoryId": 10,
+    "bookingModel": 1,
+    "allowedResourceCategoryIds": [
+      -2147483626
+    ],
+    "localizedValues": [
+      {
+        "cultureName": "en-CA",
+        "name": "Lake O'Hara Day Use Bus"
+      }
+    ]
+  },
+  {
+    "bookingCategoryId": 8,
+    "bookingModel": 1,
+    "allowedResourceCategoryIds": [
+      -2147483628
+    ],
+    "localizedValues": [
+      {
+        "cultureName": "en-CA",
+        "name": "Parking"
+      }
+    ]
+  },
+  {
+    "bookingCategoryId": 0,
+    "bookingModel": 0,
+    "allowedResourceCategoryIds": [
+      -2147483648
+    ],
+    "localizedValues": [
+      {
+        "cultureName": "en-CA",
+        "name": "Campsite"
+      }
+    ]
+  },
+  {
+    "bookingCategoryId": 5,
+    "bookingModel": 5,
+    "allowedResourceCategoryIds": [
+      -2147483632
+    ],
+    "localizedValues": [
+      {
+        "cultureName": "en-CA",
+        "name": "Backcountry Zone"
+      }
+    ],
+    "additionalCapacityCategoryId": -32766
+  }
+]

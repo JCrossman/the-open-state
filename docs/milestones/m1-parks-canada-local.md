@@ -2,6 +2,15 @@
 
 **Status: locked. Build this first.** Assumes `docs/01-architecture.md`.
 
+> **Implementation note (current):** This is a historical planning document. The
+> project was **rewritten in TypeScript** and ships as a local `.mcpb` bundle
+> (`packages/core` + `packages/bundle`); the Python/FastMCP/camply implementation and
+> the Azure remote preview have been **removed**. References to Python, camply,
+> FastMCP, SQLite, uv, or remote hosting below are historical. The authoritative,
+> current docs are [`open-state-camping/README.md`](../../open-state-camping/README.md)
+> and [`docs/01-architecture.md`](../01-architecture.md).
+
+
 ## Goal
 
 From the citizen’s AI assistant (test in Claude Desktop), a person can search Parks Canada campsites in plain language, filter for accessibility, get a prepared booking deep link they confirm themselves, and set a cancellation alert. No login, no booking on the server, no stored identity.

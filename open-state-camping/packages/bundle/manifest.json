@@ -1,0 +1,107 @@
+{
+  "manifest_version": "0.3",
+  "name": "open-state-camping",
+  "display_name": "The Open State: Camping",
+  "version": "0.16.0",
+  "description": "Find and book Parks Canada campsites in plain language, accessibly — from your own machine.",
+  "long_description": "An independent, public-interest assistive tool. It searches Parks Canada campsite availability in plain language, puts accessibility first, and runs entirely on your own device so your searches come from your own connection. It is not operated by or endorsed by Parks Canada. It never stores your government login and never books on its own — you confirm everything yourself.",
+  "author": {
+    "name": "The Open State"
+  },
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.mjs",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/server/index.mjs"
+      ]
+    }
+  },
+  "tools": [
+    {
+      "name": "resolve_dates",
+      "description": "Work out exact calendar dates and the correct weekday from a month/day (+ optional year and nights). Use before searching or booking instead of computing dates yourself."
+    },
+    {
+      "name": "search_parks",
+      "description": "Find Parks Canada campgrounds by a plain-language place name."
+    },
+    {
+      "name": "list_equipment_types",
+      "description": "List equipment types you can filter sites by (tent, RV, ...)."
+    },
+    {
+      "name": "search_sites",
+      "description": "Find open campsites in a campground for a stay, accessibility first."
+    },
+    {
+      "name": "search_park_availability",
+      "description": "Check every campground in a park at once and say which have openings."
+    },
+    {
+      "name": "search_day_use",
+      "description": "Search Day Use passes (shuttles, parking, guided events); browse or get open times."
+    },
+    {
+      "name": "search_backcountry",
+      "description": "Search backcountry zones for available nights (entry-point itineraries); accessibility surfaced."
+    },
+    {
+      "name": "get_site_details",
+      "description": "Plain-language detail about one campsite, including accessibility and photos shown inline in the conversation."
+    },
+    {
+      "name": "prepare_booking_url",
+      "description": "Fallback only — prefer prepare_booking, which completes the reservation up to payment. Use this link only if prepare_booking can't be used."
+    },
+    {
+      "name": "connect_account",
+      "description": "Log in / sign in / connect your Parks Canada account: opens your own Chrome so you sign in yourself; session saved encrypted on this device."
+    },
+    {
+      "name": "connection_status",
+      "description": "Check whether your Parks Canada account is connected and the session is still valid."
+    },
+    {
+      "name": "disconnect_account",
+      "description": "Remove the saved Parks Canada session from this device."
+    },
+    {
+      "name": "get_account",
+      "description": "Show your Parks Canada profile (name, email, phone, address) from your connected session."
+    },
+    {
+      "name": "list_my_reservations",
+      "description": "List your current and upcoming Parks Canada reservations from your connected session."
+    },
+    {
+      "name": "update_account",
+      "description": "Update your Parks Canada profile (phone, address, name, language) after you confirm the change."
+    },
+    {
+      "name": "prepare_booking",
+      "description": "Book or reserve a campsite: completes the reservation through Parks Canada up to the payment screen, then opens your cart so you review and pay. Use this to book — not a website link. Nothing is held or charged until you pay."
+    },
+    {
+      "name": "debug_account_shape",
+      "description": "Diagnostic: profile data shape (personal values masked)."
+    },
+    {
+      "name": "create_alert",
+      "description": "Watch a campground and get notified when a cancellation opens a site."
+    },
+    {
+      "name": "list_alerts",
+      "description": "List your saved cancellation watches and their status."
+    },
+    {
+      "name": "delete_alert",
+      "description": "Delete a saved cancellation watch by id."
+    },
+    {
+      "name": "get_reservation_policies",
+      "description": "Parks Canada's reservation rules in plain language: fees, change/cancel deadlines and refunds, check-in times, no-shows, and that park entry isn't included. Use for any 'what if I cancel / is there a fee / when's check-in' question."
+    }
+  ]
+}

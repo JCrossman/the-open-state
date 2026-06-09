@@ -1,15 +1,8 @@
 {
   "mcpServers": {
     "open-state-camping": {
-      "command": "uv",
-      "args": [
-        "run",
-        "--directory",
-        "open-state-camping",
-        "python",
-        "-m",
-        "open_state_camping.server"
-      ]
+      "command": "node",
+      "args": ["open-state-camping/packages/bundle/dist/server.js"]
     }
   }
 }

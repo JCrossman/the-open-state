@@ -1,5 +1,13 @@
 # 00 - Overview
 
+> **Implementation note (current):** The first service (Parks Canada camping) is
+> built and live as a **TypeScript** local `.mcpb` bundle — all four booking families
+> search and book end-to-end. The original Python/camply plan and the Azure remote
+> preview have been removed. See
+> [`open-state-camping/README.md`](../open-state-camping/README.md) and
+> [`01-architecture.md`](01-architecture.md). Milestone tables below are historical.
+
+
 ## The movement
 
 **The Open State** is a social inclusion movement: public services should be reachable by every citizen, through the AI assistant they already use, regardless of ability, age, or language. It is not a company. Success is citizens reaching what is already theirs, and ultimately the public sector adopting this approach for all services.
