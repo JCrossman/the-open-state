@@ -55,4 +55,27 @@ describe("confirm gate (Constitution Art. 2)", () => {
     expect(f).toContain("confirm and I'll hold the site");
     expect(f).toContain("You make the final decision");
   });
+
+  it("threads prepared context from phase 1 to phase 2 (no recompute)", async () => {
+    let prepareCalls = 0;
+    const handler = confirmGated<{ n: number; confirm?: boolean }, { doubled: number }>({
+      async prepare(args) {
+        prepareCalls += 1;
+        return {
+          summary: `I'll process ${args.n}.`,
+          onConfirm: "confirm and I'll process it",
+          prepared: { doubled: args.n * 2 },
+        };
+      },
+      async execute(_args, outcome) {
+        // Phase 2 uses exactly what phase 1 computed — no second prepare pass.
+        return `Processed using ${outcome.prepared!.doubled}.`;
+      },
+    });
+    await handler({ n: 21 }); // preview
+    const out = await handler({ n: 21, confirm: true }); // execute
+    expect(out.content[0]!.text).toBe("Processed using 42.");
+    // Each call prepares once; execute reuses that outcome, never re-preparing.
+    expect(prepareCalls).toBe(2);
+  });
 });
