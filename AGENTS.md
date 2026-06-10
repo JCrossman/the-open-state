@@ -11,9 +11,21 @@ A reference implementation of the **Civic Access Protocol**, under the movement 
 ## Read these, in order
 
 1. **CONSTITUTION.md** (repo root). Binding commitments. Never violate these, even for convenience. The most important: never store citizen government credentials; never auto-complete a consequential action; accessibility and plain language are mandatory.
+1. **CONFORMANCE.md** (repo root). How implementations declare and inherit conformance, and the `AGENTS.md` stanza other Open State projects paste in.
 1. **docs/00-overview.md**. The full arc, principles, and glossary.
 1. **docs/01-architecture.md**. Cross-cutting technical decisions that apply to every milestone (stack, provider abstraction, auth model, data model, security).
 1. **docs/milestones/**. Build one milestone at a time. Start with `m1-parks-canada-local.md`. Do not pull work forward from later milestones unless asked.
+
+## The kit
+
+Constitutional plumbing shared by every implementation lives in **`kit/`
+(@open-state/kit)**: the encrypted on-device session vault (Art. 1), the
+two-phase confirm gate (Art. 2), and citizen-driven browser sign-in (Art. 10).
+Use it rather than re-implementing those behaviors; treat its public API as a
+conformance surface (breaking changes are deliberate, semver-major acts).
+Promote code into the kit only when it is genuinely constitutional and
+duplicated across ≥2 implementations — when in doubt, it's domain code and
+stays in the implementation.
 
 ## How to work
 

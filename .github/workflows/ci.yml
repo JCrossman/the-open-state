@@ -1,8 +1,9 @@
 name: CI
 
 # Gate every PR to main (and pushes to main) on a clean build + the offline test
-# suite. The tests never touch the live Parks Canada API — they run against
-# recorded fixtures — so CI is deterministic and never hammers the upstream.
+# suite, across the whole workspace (@open-state/kit + the camping packages).
+# Tests never touch live public services — recorded fixtures only — so CI is
+# deterministic and never hammers an upstream (Constitution Art. 7.3).
 
 on:
   pull_request:
@@ -20,24 +21,19 @@ concurrency:
 jobs:
   build-test:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: open-state-camping
     steps:
       - uses: actions/checkout@v4
 
       # pnpm first, so setup-node's pnpm cache has a package manager to key on.
-      # The version comes from the workspace's packageManager field (pnpm@10.33.0);
-      # point the action at it explicitly since it lives in the subdir, not repo root.
+      # The version comes from the root packageManager field (pnpm@10.33.0);
+      # the workspace root is the repo root (kit + open-state-camping packages).
       - uses: pnpm/action-setup@v4
-        with:
-          package_json_file: open-state-camping/package.json
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-          cache-dependency-path: open-state-camping/pnpm-lock.yaml
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install (frozen lockfile)
         run: pnpm install --frozen-lockfile
