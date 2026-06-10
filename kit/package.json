@@ -1,6 +1,6 @@
 {
   "name": "@open-state/kit",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "The Civic Access Protocol kit: the code embodiment of The Open State Constitution. Encrypted on-device session vault (Art. 1), the two-phase human-confirm gate (Art. 2), and citizen-driven browser session capture (Art. 10) — shared by every Open State implementation.",
   "license": "MIT",

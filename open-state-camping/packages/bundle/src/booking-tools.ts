@@ -10,9 +10,15 @@
  * nothing is held or written until the citizen calls again with `confirm: true`.
  * We never enter a card or pay (Art. 2, Art. 10) — and because a reservation only
  * exists once paid, preparing it incurs no fee.
+ *
+ * The two-phase routing and the constitutional preview wording come from the
+ * shared kit (`confirmGated`, @open-state/kit) so every Open State implementation
+ * gates consequential actions identically; the Parks-Canada-specific work lives in
+ * `prepareBooking` (phase 1) and `executeBooking` (phase 2).
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { confirmGated, type TwoPhaseOutcome } from "@open-state/kit";
 import {
   addDays,
   BOOKING_CATEGORY_ID,
@@ -32,10 +38,50 @@ import { openCheckout } from "./session/capture.js";
 import { loadSession } from "./session/vault.js";
 import { stayDatesProblem, withWeekday } from "./format.js";
 
-type TextResult = { content: { type: "text"; text: string }[] };
-const text = (s: string): TextResult => ({ content: [{ type: "text", text: s }] });
+/** One night of a backcountry itinerary (a zone for a date range). */
+interface ItineraryLeg {
+  zone_id: string;
+  start_date: string;
+  end_date: string;
+}
+
+/** The arguments prepare_booking accepts (mirrors the zod schema below). */
+interface PrepareBookingArgs {
+  campground_id: string;
+  site_id?: string;
+  start_date?: string;
+  end_date?: string;
+  adults?: number;
+  seniors?: number;
+  youth?: number;
+  children?: number;
+  equipment_type?: string;
+  category?: "campsite" | "group" | "accommodation";
+  product_id?: string;
+  itinerary?: ItineraryLeg[];
+  entry_point_id?: string;
+  confirm?: boolean;
+}
+
+/**
+ * Everything phase 1 computed that phase 2 needs — threaded through the gate so
+ * the booking we execute is exactly the one the citizen previewed (no recompute,
+ * no drift). `summary` here is the plain booking summary (the preview adds the
+ * policy highlights on top).
+ */
+interface PreparedBooking {
+  request: BookingRequest;
+  envelope: ShopperEnvelope;
+  summary: string;
+}
 
 export function registerBookingTools(server: McpServer, provider: ParksCanadaProvider): void {
+  // The two-phase confirm gate (Constitution Art. 2), from the shared kit.
+  const handle = confirmGated<PrepareBookingArgs, PreparedBooking>({
+    prepare: (args) => prepareBooking(args, provider),
+    execute: (_args, outcome) => executeBooking(outcome, provider),
+  });
+
   server.registerTool(
     "prepare_booking",
     {
@@ -129,286 +175,299 @@ export function registerBookingTools(server: McpServer, provider: ParksCanadaPro
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
-    async (args) => {
-      if (!loadSession()) {
-        return text("You're not connected yet. Run connect_account to sign in first.");
-      }
+    async (args) => handle(args as PrepareBookingArgs),
+  );
+}
 
-      // Three booking shapes share this flow: overnight site (model 0), Day Use
-      // time-slot (model 1), and a Backcountry multi-night itinerary (model 5).
-      const itinerary = args.itinerary ?? [];
-      const isBackcountry = itinerary.length > 0;
-      const isDayUse = !isBackcountry && args.product_id != null;
+/**
+ * Phase 1 (Art. 2.2): validate and fully assemble the booking, holding/writing
+ * NOTHING. Returns the plain-language preview plus the computed request/envelope
+ * for phase 2, or a `problem` string to show instead (a validation failure is a
+ * normal outcome, not an error — Art. 7.2).
+ */
+async function prepareBooking(
+  args: PrepareBookingArgs,
+  provider: ParksCanadaProvider,
+): Promise<TwoPhaseOutcome<PreparedBooking> | { problem: string }> {
+  if (!loadSession()) {
+    return { problem: "You're not connected yet. Run connect_account to sign in first." };
+  }
 
-      // Ids must be the NUMERIC ids from search, not product/place names. Passing a
-      // name yields a NaN cart the platform rejects with HTTP 500 (see bug report);
-      // catch it here with a clear message that points back to the search output.
-      const badId = (v?: string | null) => v == null || v === "" || Number.isNaN(Number(v));
-      if (badId(args.campground_id)) {
-        return text(
-          "campground_id must be the numeric facility id from the search results " +
-            "(e.g. -2147483642), not a name. For Day Use and Backcountry, use the " +
-            "campground_id shown in brackets next to the result.",
-        );
-      }
-      if (isBackcountry) {
-        if (badId(args.product_id)) {
-          return text("product_id must be the numeric id shown by search_backcountry, not a name.");
-        }
-        if (itinerary.some((l) => badId(l.zone_id))) {
-          return text("Each itinerary zone_id must be the numeric id shown by search_backcountry.");
-        }
-      } else {
-        if (badId(args.site_id)) {
-          return text(
-            "site_id must be the numeric id from the search results (the site or time-" +
-              "slot id), not a name.",
-          );
-        }
-        if (isDayUse && badId(args.product_id)) {
-          return text("product_id must be the numeric id shown by search_day_use, not a name.");
-        }
-      }
+  // Three booking shapes share this flow: overnight site (model 0), Day Use
+  // time-slot (model 1), and a Backcountry multi-night itinerary (model 5).
+  const itinerary = args.itinerary ?? [];
+  const isBackcountry = itinerary.length > 0;
+  const isDayUse = !isBackcountry && args.product_id != null;
 
-      let startDate: string;
-      let endDate: string;
-      if (isBackcountry) {
-        if (!args.product_id) {
-          return text("A backcountry trip needs product_id (from search_backcountry).");
-        }
-        for (const leg of itinerary) {
-          const li = stayDatesProblem(leg.start_date, leg.end_date);
-          if (li) return text(`Itinerary problem — ${li}`);
-        }
-        startDate = itinerary[0]!.start_date;
-        endDate = itinerary[itinerary.length - 1]!.end_date;
-      } else {
-        if (!args.start_date) return text("Please give an arrival date (start_date).");
-        if (!args.site_id) return text("Please give the site_id to book.");
-        startDate = args.start_date;
-        // Day Use is a single day held over one night-window (start → start+1).
-        endDate = isDayUse
-          ? args.end_date && args.end_date > startDate
-            ? args.end_date
-            : addDays(startDate, 1)
-          : (args.end_date ?? "");
-        if (!endDate) {
-          return text("Please give a departure date (end_date) for an overnight stay.");
-        }
-        const dateIssue = stayDatesProblem(startDate, endDate);
-        if (dateIssue) return text(dateIssue);
-      }
-
-      const party: PartyCounts = {
-        adults: args.adults ?? 1,
-        seniors: args.seniors,
-        youth: args.youth,
-        children: args.children,
+  // Ids must be the NUMERIC ids from search, not product/place names. Passing a
+  // name yields a NaN cart the platform rejects with HTTP 500 (see bug report);
+  // catch it here with a clear message that points back to the search output.
+  const badId = (v?: string | null) => v == null || v === "" || Number.isNaN(Number(v));
+  if (badId(args.campground_id)) {
+    return {
+      problem:
+        "campground_id must be the numeric facility id from the search results " +
+        "(e.g. -2147483642), not a name. For Day Use and Backcountry, use the " +
+        "campground_id shown in brackets next to the result.",
+    };
+  }
+  if (isBackcountry) {
+    if (badId(args.product_id)) {
+      return { problem: "product_id must be the numeric id shown by search_backcountry, not a name." };
+    }
+    if (itinerary.some((l) => badId(l.zone_id))) {
+      return { problem: "Each itinerary zone_id must be the numeric id shown by search_backcountry." };
+    }
+  } else {
+    if (badId(args.site_id)) {
+      return {
+        problem:
+          "site_id must be the numeric id from the search results (the site or time-" +
+          "slot id), not a name.",
       };
-      if (partySize(party) < 1) {
-        return text("A booking needs at least one person in the party.");
-      }
+    }
+    if (isDayUse && badId(args.product_id)) {
+      return { problem: "product_id must be the numeric id shown by search_day_use, not a name." };
+    }
+  }
 
-      let envelope: ShopperEnvelope | null;
-      try {
-        envelope = (await provider.getShopperEnvelope()) as ShopperEnvelope | null;
-      } catch (err) {
-        return text(err instanceof Error ? err.message : String(err));
-      }
-      if (!envelope || !envelope.currentVersion) {
-        return text(
-          "I couldn't read your account to prepare the booking — your session may " +
-            "have expired. Run connect_account to sign in again.",
-        );
-      }
+  let startDate: string;
+  let endDate: string;
+  if (isBackcountry) {
+    if (!args.product_id) {
+      return { problem: "A backcountry trip needs product_id (from search_backcountry)." };
+    }
+    for (const leg of itinerary) {
+      const li = stayDatesProblem(leg.start_date, leg.end_date);
+      if (li) return { problem: `Itinerary problem — ${li}` };
+    }
+    startDate = itinerary[0]!.start_date;
+    endDate = itinerary[itinerary.length - 1]!.end_date;
+  } else {
+    if (!args.start_date) return { problem: "Please give an arrival date (start_date)." };
+    if (!args.site_id) return { problem: "Please give the site_id to book." };
+    startDate = args.start_date;
+    // Day Use is a single day held over one night-window (start → start+1).
+    endDate = isDayUse
+      ? args.end_date && args.end_date > startDate
+        ? args.end_date
+        : addDays(startDate, 1)
+      : (args.end_date ?? "");
+    if (!endDate) {
+      return { problem: "Please give a departure date (end_date) for an overnight stay." };
+    }
+    const dateIssue = stayDatesProblem(startDate, endDate);
+    if (dateIssue) return { problem: dateIssue };
+  }
 
-      // Equipment: a site takes the citizen's chosen gear; Day Use carries none; a
-      // backcountry permit takes the zone's own allowed equipment.
-      let equipmentCategoryId: number | undefined;
-      let subEquipmentCategoryId: number | undefined;
-      let equipLabel = args.equipment_type;
-      if (isBackcountry) {
-        // Backcountry equipment is product-dependent: Backcountry Campsite zones list
-        // it; Backcountry Zone permits carry none. Use it if present, otherwise omit
-        // it — do NOT block the booking (the old hard error broke Glacier zones).
-        const bc = await provider.backcountryEquipment(
-          args.campground_id,
-          itinerary[0]!.zone_id,
-        );
-        if (bc) {
-          equipmentCategoryId = bc.equipmentCategoryId;
-          subEquipmentCategoryId = bc.subEquipmentCategoryId;
-        }
-        equipLabel = bc ? "backcountry permit" : "backcountry permit (no equipment)";
-      } else if (!isDayUse) {
-        try {
-          const resolved = await provider.resolveEquipment(args.equipment_type ?? null);
-          subEquipmentCategoryId = resolved ?? undefined;
-        } catch (err) {
-          return text(err instanceof Error ? err.message : String(err));
-        }
-      }
+  const party: PartyCounts = {
+    adults: args.adults ?? 1,
+    seniors: args.seniors,
+    youth: args.youth,
+    children: args.children,
+  };
+  if (partySize(party) < 1) {
+    return { problem: "A booking needs at least one person in the party." };
+  }
 
-      // Each backcountry leg's hold kind depends on its resourceModel (a quota Zone
-      // needs a zone blocker, a Campsite a site blocker) — resolve it from the facility.
-      const models = isBackcountry
-        ? await provider.resourceModels(args.campground_id)
-        : new Map<string, number>();
-      const isZonePermit =
-        isBackcountry && itinerary.some((l) => models.get(String(l.zone_id)) === 2);
+  let envelope: ShopperEnvelope | null;
+  try {
+    envelope = (await provider.getShopperEnvelope()) as ShopperEnvelope | null;
+  } catch (err) {
+    return { problem: err instanceof Error ? err.message : String(err) };
+  }
+  if (!envelope || !envelope.currentVersion) {
+    return {
+      problem:
+        "I couldn't read your account to prepare the booking — your session may " +
+        "have expired. Run connect_account to sign in again.",
+    };
+  }
 
-      // A zone permit starts from an entry point (trailhead) and carries the zone's
-      // capacity category. Resolve the entry point: use the one given, else the single
-      // one the facility has; if there are several, ask which (listing them).
-      let entryPointResourceId: number | undefined;
-      let zoneCapacityCategoryId: number | undefined;
-      if (isZonePermit) {
-        const entries = await provider.backcountryEntryPoints(args.campground_id);
-        if (args.entry_point_id != null) {
-          entryPointResourceId = Number(args.entry_point_id);
-        } else if (entries.length === 1) {
-          entryPointResourceId = Number(entries[0]!.id);
-        } else if (entries.length > 1) {
-          return text(
-            "This backcountry area has several entry points (trailheads). Tell me which " +
-              "to start from and I'll prepare it (pass entry_point_id). Options:\n" +
-              entries.map((e) => `  - ${e.name}  [entry_point_id=${e.id}]`).join("\n"),
-          );
-        }
-        zoneCapacityCategoryId = await provider.backcountryCapacityCategory(
-          Number(args.product_id),
-        );
-      }
+  // Equipment: a site takes the citizen's chosen gear; Day Use carries none; a
+  // backcountry permit takes the zone's own allowed equipment.
+  let equipmentCategoryId: number | undefined;
+  let subEquipmentCategoryId: number | undefined;
+  let equipLabel = args.equipment_type;
+  if (isBackcountry) {
+    // Backcountry equipment is product-dependent: Backcountry Campsite zones list
+    // it; Backcountry Zone permits carry none. Use it if present, otherwise omit
+    // it — do NOT block the booking (the old hard error broke Glacier zones).
+    const bc = await provider.backcountryEquipment(args.campground_id, itinerary[0]!.zone_id);
+    if (bc) {
+      equipmentCategoryId = bc.equipmentCategoryId;
+      subEquipmentCategoryId = bc.subEquipmentCategoryId;
+    }
+    equipLabel = bc ? "backcountry permit" : "backcountry permit (no equipment)";
+  } else if (!isDayUse) {
+    try {
+      const resolved = await provider.resolveEquipment(args.equipment_type ?? null);
+      subEquipmentCategoryId = resolved ?? undefined;
+    } catch (err) {
+      return { problem: err instanceof Error ? err.message : String(err) };
+    }
+  }
 
-      const group: CategoryGroup = args.category ?? "campsite";
-      const request: BookingRequest = {
-        resourceId: Number(isBackcountry ? itinerary[0]!.zone_id : args.site_id),
-        resourceLocationId: Number(args.campground_id),
-        startDate,
-        endDate,
-        party,
-        equipmentCategoryId,
-        subEquipmentCategoryId,
-        bookingCategoryId:
-          isBackcountry || isDayUse
-            ? Number(args.product_id)
-            : BOOKING_CATEGORY_ID[group],
-        bookingModel: isBackcountry ? 5 : isDayUse ? 1 : undefined,
-        entryPointResourceId,
-        zoneCapacityCategoryId,
-        itinerary: isBackcountry
-          ? itinerary.map((l) => ({
-              resourceId: Number(l.zone_id),
-              startDate: l.start_date,
-              endDate: l.end_date,
-              resourceModel: models.get(String(l.zone_id)),
-            }))
-          : undefined,
+  // Each backcountry leg's hold kind depends on its resourceModel (a quota Zone
+  // needs a zone blocker, a Campsite a site blocker) — resolve it from the facility.
+  const models = isBackcountry
+    ? await provider.resourceModels(args.campground_id)
+    : new Map<string, number>();
+  const isZonePermit =
+    isBackcountry && itinerary.some((l) => models.get(String(l.zone_id)) === 2);
+
+  // A zone permit starts from an entry point (trailhead) and carries the zone's
+  // capacity category. Resolve the entry point: use the one given, else the single
+  // one the facility has; if there are several, ask which (listing them).
+  let entryPointResourceId: number | undefined;
+  let zoneCapacityCategoryId: number | undefined;
+  if (isZonePermit) {
+    const entries = await provider.backcountryEntryPoints(args.campground_id);
+    if (args.entry_point_id != null) {
+      entryPointResourceId = Number(args.entry_point_id);
+    } else if (entries.length === 1) {
+      entryPointResourceId = Number(entries[0]!.id);
+    } else if (entries.length > 1) {
+      return {
+        problem:
+          "This backcountry area has several entry points (trailheads). Tell me which " +
+          "to start from and I'll prepare it (pass entry_point_id). Options:\n" +
+          entries.map((e) => `  - ${e.name}  [entry_point_id=${e.id}]`).join("\n"),
       };
+    }
+    zoneCapacityCategoryId = await provider.backcountryCapacityCategory(Number(args.product_id));
+  }
 
-      const summary = bookingSummary(request, party, envelope, equipLabel);
+  const group: CategoryGroup = args.category ?? "campsite";
+  const request: BookingRequest = {
+    resourceId: Number(isBackcountry ? itinerary[0]!.zone_id : args.site_id),
+    resourceLocationId: Number(args.campground_id),
+    startDate,
+    endDate,
+    party,
+    equipmentCategoryId,
+    subEquipmentCategoryId,
+    bookingCategoryId:
+      isBackcountry || isDayUse ? Number(args.product_id) : BOOKING_CATEGORY_ID[group],
+    bookingModel: isBackcountry ? 5 : isDayUse ? 1 : undefined,
+    entryPointResourceId,
+    zoneCapacityCategoryId,
+    itinerary: isBackcountry
+      ? itinerary.map((l) => ({
+          resourceId: Number(l.zone_id),
+          startDate: l.start_date,
+          endDate: l.end_date,
+          resourceModel: models.get(String(l.zone_id)),
+        }))
+      : undefined,
+  };
 
-      // The policy family this booking falls under, so we can quote the right
-      // cancellation deadline / fee in the preview (the citizen confirms informed).
-      const policyFamily = isBackcountry
-        ? "backcountry"
-        : isDayUse
-          ? "dayUse"
-          : policyFamilyForCategory(group);
+  const summary = bookingSummary(request, party, envelope, equipLabel);
 
-      // Phase 1 — prepare and describe only. Nothing is held or written.
-      if (!args.confirm) {
-        return text(
-          summary +
-            "\n\n" +
-            bookingPolicyHighlights(policyFamily) +
-            "\n\nThis is a preview — nothing is held or paid yet. If everything is " +
-            "right, confirm and I'll hold the site and open your cart so you can " +
-            "review and pay yourself. (A reservation, and any fee, only exists once " +
-            "you pay.)",
-        );
-      }
+  // The policy family this booking falls under, so we can quote the right
+  // cancellation deadline / fee in the preview (the citizen confirms informed).
+  const policyFamily = isBackcountry
+    ? "backcountry"
+    : isDayUse
+      ? "dayUse"
+      : policyFamilyForCategory(group);
 
-      // Phase 2 — the citizen confirmed. Start a real, server-issued cart and
-      // transaction (GET /api/cart for the server's cartUid, then
-      // /api/cart/newtransaction for the shift/user/reference context the commit
-      // requires — fabricating either is rejected with a 400). Then drive the
-      // booking through the wizard's commit stages (hold → details → finalize).
-      // We stop before payment and never pay.
-      const ids = newBookingIds();
-      let base: Record<string, any>;
-      try {
-        const fresh = await provider.getNewCart();
-        base = await provider.newCartTransaction(String(fresh["cartUid"]));
-      } catch (err) {
-        return text(
-          `I couldn't start a booking with Parks Canada.\n${
-            err instanceof Error ? err.message : String(err)
-          }\n\nNothing was reserved and nothing was charged.`,
-        );
-      }
-      for (const stage of BOOKING_STAGES) {
-        const cart = buildBookingCart(base, request, ids, envelope, stage);
-        try {
-          await provider.commitCart(cart, { isCompleted: false });
-        } catch (err) {
-          return text(
-            `I couldn't prepare the booking with Parks Canada (it failed at the ` +
-              `"${stage}" step). Nothing was reserved and nothing was charged; any ` +
-              `held site releases on its own.\n\n` +
-              `Parks Canada's exact response (please share this verbatim so it can ` +
-              `be fixed):\n${err instanceof Error ? err.message : String(err)}\n\n` +
-              `The cart I sent at the "${stage}" step (your personal details ` +
-              `masked):\n${maskedCart(cart)}`,
-          );
-        }
-      }
+  // The preview adds the policy highlights to the summary; the standardized
+  // "nothing held/charged, you decide" footer is supplied by the kit gate.
+  return {
+    summary: summary + "\n\n" + bookingPolicyHighlights(policyFamily),
+    onConfirm:
+      "I'll hold the site and open your cart so you can review and pay yourself — " +
+      "a reservation, and any fee, only exist once you pay",
+    prepared: { request, envelope, summary },
+  };
+}
 
-      const cartUid = String(base["cartUid"]);
-      const cartTransactionUid = String(base["newTransaction"]?.["cartTransactionUid"] ?? "");
-
-      // Confirm the booking actually landed in the cart server-side (separates a
-      // commit that didn't persist from a browser hand-off that showed the wrong cart).
-      let bookingCount = -1;
-      try {
-        const saved = await provider.getCart(cartUid, cartTransactionUid);
-        const bookings = saved?.["bookings"];
-        if (Array.isArray(bookings)) bookingCount = bookings.length;
-      } catch {
-        /* verification is best-effort */
-      }
-
-      try {
-        await openCheckout({ cartUid, cartTransactionUid });
-      } catch (err) {
-        return text(
-          summary +
-            "\n\nI prepared your cart, but couldn't open your browser " +
-            `automatically (${err instanceof Error ? err.message : String(err)}). ` +
-            "Open https://reservation.pc.gc.ca/cart in Chrome to review and pay.",
-        );
-      }
-
-      if (bookingCount === 0) {
-        return text(
-          summary +
-            "\n\nI sent the booking to Parks Canada without an error, but when I read " +
-            "your cart back it was empty — so it didn't actually hold. Nothing was " +
-            "reserved or charged. This is a bug on my side; please let me know so I " +
-            `can fix it. (cart ${cartUid})`,
-        );
-      }
-
-      return text(
-        summary +
-          "\n\nYour cart is ready" +
-          (bookingCount > 0 ? " (I confirmed the site is held in your cart)" : "") +
-          ". I've opened Parks Canada in your browser at your cart — review it and " +
-          "enter payment there to confirm. Nothing is reserved until you pay, and I " +
-          "never handle your card. The held site will release on its own if you " +
-          "don't complete payment.",
+/**
+ * Phase 2 (Art. 2.1): the citizen confirmed. Start a real, server-issued cart and
+ * transaction (GET /api/cart for the server's cartUid, then
+ * /api/cart/newtransaction for the shift/user/reference context the commit
+ * requires — fabricating either is rejected with a 400). Then drive the booking
+ * through the wizard's commit stages (hold → details → finalize), stop before
+ * payment, and open the citizen's cart so they pay themselves. We never pay.
+ */
+async function executeBooking(
+  outcome: TwoPhaseOutcome<PreparedBooking>,
+  provider: ParksCanadaProvider,
+): Promise<string> {
+  const { request, envelope, summary } = outcome.prepared!;
+  const ids = newBookingIds();
+  let base: Record<string, any>;
+  try {
+    const fresh = await provider.getNewCart();
+    base = await provider.newCartTransaction(String(fresh["cartUid"]));
+  } catch (err) {
+    return (
+      `I couldn't start a booking with Parks Canada.\n${
+        err instanceof Error ? err.message : String(err)
+      }\n\nNothing was reserved and nothing was charged.`
+    );
+  }
+  for (const stage of BOOKING_STAGES) {
+    const cart = buildBookingCart(base, request, ids, envelope, stage);
+    try {
+      await provider.commitCart(cart, { isCompleted: false });
+    } catch (err) {
+      return (
+        `I couldn't prepare the booking with Parks Canada (it failed at the ` +
+        `"${stage}" step). Nothing was reserved and nothing was charged; any ` +
+        `held site releases on its own.\n\n` +
+        `Parks Canada's exact response (please share this verbatim so it can ` +
+        `be fixed):\n${err instanceof Error ? err.message : String(err)}\n\n` +
+        `The cart I sent at the "${stage}" step (your personal details ` +
+        `masked):\n${maskedCart(cart)}`
       );
-    },
+    }
+  }
+
+  const cartUid = String(base["cartUid"]);
+  const cartTransactionUid = String(base["newTransaction"]?.["cartTransactionUid"] ?? "");
+
+  // Confirm the booking actually landed in the cart server-side (separates a
+  // commit that didn't persist from a browser hand-off that showed the wrong cart).
+  let bookingCount = -1;
+  try {
+    const saved = await provider.getCart(cartUid, cartTransactionUid);
+    const bookings = saved?.["bookings"];
+    if (Array.isArray(bookings)) bookingCount = bookings.length;
+  } catch {
+    /* verification is best-effort */
+  }
+
+  try {
+    await openCheckout({ cartUid, cartTransactionUid });
+  } catch (err) {
+    return (
+      summary +
+      "\n\nI prepared your cart, but couldn't open your browser " +
+      `automatically (${err instanceof Error ? err.message : String(err)}). ` +
+      "Open https://reservation.pc.gc.ca/cart in Chrome to review and pay."
+    );
+  }
+
+  if (bookingCount === 0) {
+    return (
+      summary +
+      "\n\nI sent the booking to Parks Canada without an error, but when I read " +
+      "your cart back it was empty — so it didn't actually hold. Nothing was " +
+      "reserved or charged. This is a bug on my side; please let me know so I " +
+      `can fix it. (cart ${cartUid})`
+    );
+  }
+
+  return (
+    summary +
+    "\n\nYour cart is ready" +
+    (bookingCount > 0 ? " (I confirmed the site is held in your cart)" : "") +
+    ". I've opened Parks Canada in your browser at your cart — review it and " +
+    "enter payment there to confirm. Nothing is reserved until you pay, and I " +
+    "never handle your card. The held site will release on its own if you " +
+    "don't complete payment."
   );
 }
 
