@@ -1,0 +1,50 @@
+name: Tag release
+
+# Create an annotated tag (e.g. constitution-v1.0, kit-v0.1.0) from the Actions
+# UI or API. Exists because releases are deliberate, versioned acts here
+# (CONFORMANCE.md): downstream implementations pin these tags, so minting one
+# should be explicit, logged, and owner-triggered — never a side effect.
+#
+# Manual dispatch only. The GITHUB_TOKEN's contents:write scope is granted to
+# this workflow alone; CI stays read-only.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag name (e.g. kit-v0.1.0)"
+        required: true
+        type: string
+      target:
+        description: "Commit SHA or ref to tag"
+        required: true
+        default: "main"
+        type: string
+      message:
+        description: "Annotation message"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target }}
+
+      # Inputs flow through env vars, not template interpolation in the script,
+      # so a crafted message can't inject shell.
+      - name: Create and push the annotated tag
+        env:
+          TAG: ${{ inputs.tag }}
+          MESSAGE: ${{ inputs.message }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "$MESSAGE"
+          git push origin "refs/tags/$TAG"
+          echo "Tagged $(git rev-parse HEAD) as $TAG"
