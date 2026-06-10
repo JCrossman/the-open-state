@@ -56,11 +56,12 @@ is written to read cleanly with a screen reader (Constitution Art. 3).
 
 ## Build
 
-A pnpm + TypeScript monorepo: `packages/core` (provider, booking cart, availability)
-and `packages/bundle` (the MCP server + the `.mcpb`).
+Part of the repo-root pnpm workspace: `packages/core` (provider, booking cart,
+availability) and `packages/bundle` (the MCP server + the `.mcpb`), on
+[`@open-state/kit`](../kit) for the session vault and citizen-driven sign-in.
 
 ```bash
-cd open-state-camping
+# at the repository root
 pnpm install
 pnpm -r build
 ```
@@ -78,6 +79,7 @@ The server speaks MCP over stdio and waits for an assistant to connect.
 Build the bundle, then install it as a desktop extension:
 
 ```bash
+# from open-state-camping/
 pnpm --filter @open-state/bundle build
 node packages/bundle/scripts/build-mcpb.mjs
 pnpm dlx @anthropic-ai/mcpb pack packages/bundle/.mcpb-build packages/bundle/open-state-camping.mcpb

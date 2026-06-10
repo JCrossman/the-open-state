@@ -28,20 +28,23 @@ guide first.
 
 ## Project layout
 
-The shipping product lives in [`open-state-camping/`](open-state-camping) — a
-pnpm + TypeScript monorepo:
+A pnpm + TypeScript workspace rooted at the repository root:
 
-- `packages/core` — the provider, booking-cart assembly, availability, policies.
-- `packages/bundle` — the local MCP server (stdio) and the `.mcpb` packaging.
+- [`kit/`](kit) — **@open-state/kit**, the Constitution's code embodiment
+  (session vault, confirm gate, citizen-driven sign-in). Shared by every
+  implementation; see [`CONFORMANCE.md`](CONFORMANCE.md). Its public API is a
+  conformance surface — breaking changes are deliberate, versioned acts.
+- [`open-state-camping/`](open-state-camping) — the reference implementation:
+  - `packages/core` — the provider, booking-cart assembly, availability, policies.
+  - `packages/bundle` — the local MCP server (stdio) and the `.mcpb` packaging.
 
 ## Development setup
 
 Requires **Node >= 20** and **pnpm 10.33.0** (via `corepack enable`, or install
-pnpm directly — the version is pinned in `open-state-camping/package.json`).
+pnpm directly — the version is pinned in the root `package.json`).
 
 ```bash
-cd open-state-camping
-pnpm install
+pnpm install    # at the repository root
 pnpm -r build   # tsc — also typechecks
 pnpm -r test    # vitest, fully offline against recorded fixtures
 ```

@@ -1,8 +1,8 @@
 {
-  "name": "open-state-camping",
+  "name": "the-open-state",
   "version": "0.1.0",
   "private": true,
-  "description": "The Open State: Camping - local-first assistive booking for Parks Canada (Node/TypeScript).",
+  "description": "The Open State — the Civic Access Protocol: the Constitution, the @open-state/kit conformance library, and the Camping reference implementation.",
   "packageManager": "pnpm@10.33.0",
   "engines": {
     "node": ">=20"

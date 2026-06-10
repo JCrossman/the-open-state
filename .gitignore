@@ -1,0 +1,10 @@
+# Node / pnpm (workspace root)
+node_modules/
+*.tsbuildinfo
+
+# Build output
+dist/
+
+# Never commit citizen material: local vaults, captures
+.open-state/
+*.har

@@ -1,0 +1,42 @@
+{
+  "name": "@open-state/kit",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "The Civic Access Protocol kit: the code embodiment of The Open State Constitution. Encrypted on-device session vault (Art. 1), the two-phase human-confirm gate (Art. 2), and citizen-driven browser session capture (Art. 10) — shared by every Open State implementation.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JCrossman/the-open-state.git",
+    "directory": "kit"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "puppeteer-core": ">=22"
+  },
+  "peerDependenciesMeta": {
+    "puppeteer-core": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "puppeteer-core": "^25.1.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
+  }
+}
