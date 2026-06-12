@@ -1,0 +1,36 @@
+# Dependabot version updates (routine dependency freshness).
+#
+# This is the config-as-code half of Dependabot — it lives in the repo and needs
+# no toggle. The *security* half (auto-PRs for vulnerable deps) is the separate
+# one-time "Dependabot security updates" switch in Settings → Code security.
+#
+# Updates are grouped to keep PR noise low: routine minor/patch bumps arrive as a
+# single PR per ecosystem; majors come individually so they get their own review.
+# Every PR still runs the full CI gate (build + test + PII tripwire + CodeQL).
+version: 2
+updates:
+  # The pnpm/TypeScript workspace (root lockfile covers kit + camping packages).
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # The GitHub Actions used by the CI / tag-release workflows.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"
+    groups:
+      actions:
+        patterns:
+          - "*"
