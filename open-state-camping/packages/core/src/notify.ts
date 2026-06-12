@@ -71,7 +71,7 @@ export function validateNotifyTarget(
 /** Create a random, unguessable ntfy topic the citizen can subscribe to. */
 export function generateChannel(ntfyBase: string): NotificationChannel {
   const topic = TOPIC_PREFIX + randomTokenUrlSafe(TOKEN_BYTES);
-  const base = ntfyBase.replace(/\/+$/, "");
+  const base = stripTrailingSlashes(ntfyBase);
   const host = safeHostname(base) || base;
   return {
     topic,
@@ -113,6 +113,18 @@ function safeHostname(u: string): string {
   } catch {
     return "";
   }
+}
+
+/**
+ * Strip trailing "/" via an index scan rather than a regex. The natural
+ * `/\/+$/` is unanchored and so retried from every position, which is O(n²) on a
+ * string of trailing slashes — a polynomial-ReDoS pattern CodeQL flags. This is
+ * linear and allocates one slice.
+ */
+function stripTrailingSlashes(s: string): string {
+  let end = s.length;
+  while (end > 0 && s.charCodeAt(end - 1) === 47 /* "/" */) end--;
+  return s.slice(0, end);
 }
 
 /** IP-literal targets in private/loopback/link-local/reserved ranges (SSRF). */

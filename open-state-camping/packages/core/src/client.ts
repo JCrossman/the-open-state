@@ -17,6 +17,22 @@ import {
 import { QueueItError, UpstreamError } from "./errors.js";
 import { localized } from "./util.js";
 
+/**
+ * True if a response URL is a Queue-it virtual waiting room. Checks the parsed
+ * hostname (queue-it.net or a subdomain of it) rather than a substring, so a
+ * path or query string that merely contains "queue-it.net" cannot masquerade as
+ * the waiting room (CodeQL js/incomplete-url-substring-sanitization).
+ */
+function isQueueItUrl(responseUrl: string): boolean {
+  let host: string;
+  try {
+    host = new URL(responseUrl).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  return host === "queue-it.net" || host.endsWith(".queue-it.net");
+}
+
 /** A `fetch`-shaped function, injectable so tests run fully offline. */
 export type FetchLike = typeof fetch;
 
@@ -130,7 +146,7 @@ export class GoingToCampClient {
       );
     }
     // Queue-it sends the browser to a *.queue-it.net waiting room.
-    if (resp.url.includes("queue-it.net")) {
+    if (isQueueItUrl(resp.url)) {
       throw new QueueItError(
         "Parks Canada is using a virtual waiting room right now. " +
           "Please try again shortly.",
@@ -170,7 +186,7 @@ export class GoingToCampClient {
         `Could not reach the Parks Canada booking system (${String(exc)}).`,
       );
     }
-    if (resp.url.includes("queue-it.net")) {
+    if (isQueueItUrl(resp.url)) {
       throw new QueueItError(
         "Parks Canada is using a virtual waiting room right now. " +
           "Please try again shortly.",
