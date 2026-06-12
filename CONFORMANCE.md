@@ -31,6 +31,42 @@ construction** rather than by re-implementation:
 Hand-rolling these is permitted by the Constitution but discouraged: a fork of
 the requirements is a fork of the bugs.
 
+### What pinning the kit does — and does *not* — get you
+
+Pinning the kit is **necessary for the mechanical articles and nowhere near
+sufficient for the whole Constitution.** Be precise about what it buys:
+
+- It covers, *materially*, **four of the ten articles** — 1, 2, 9, and 10 — and
+  even those **partially.** The kit gives you a correct *mechanism*; it cannot
+  make an *article* fully satisfied on its own. A correct vault can't stop the
+  next line of your code from logging the session; a correct gate can't force
+  you to wrap every consequential action in it, or make your preview
+  understandable; `capture` can't stop other code from defeating a human gate.
+- It does **nothing** for **six articles** — **3 (accessibility), 4 (assistant
+  freedom), 5 (data minimization), 6 (no exploitation), 7 (honesty), 8
+  (openness).** These are judgment, design, and policy; no dependency can confer
+  them. For many services the highest-stakes rule lives here (e.g. Art. 5.4,
+  sensitive health/disability data) — exactly where the kit is silent.
+
+| Article | What pinning the kit gives you |
+|---|---|
+| 1 — Credentials on-device | **Mechanism** (vault + capture) — *you* must not leak the session elsewhere |
+| 2 — The human decides | **Mechanism** (`confirmGated`) — *you* must wrap every action and write a clear preview; 2.4 (no resource-racing) uncovered |
+| 9 — Security & law | **Partial** — the gate satisfies 9.3's human-gate; 9.1 (law) and 9.2 (no passthrough) are yours |
+| 10 — Assistive, not a bot | **Mechanism** (`capture`) — *you* must not defeat a gate elsewhere |
+| 3, 4, 5, 6, 7, 8 | **Nothing** — judgment/design/policy; carried by §3 (agent context) + §4 (review) |
+
+So: **"we pinned the kit, therefore we're compliant" is false** — and it's the
+red flag to watch for when evaluating an implementation. Pinning the kit is one
+of three layers, not the whole of conformance:
+
+1. **Kit (code)** — the mechanical slice, right by construction *when used correctly*.
+2. **Constitution in the agent's context (§3)** — the six judgment articles the kit can't touch.
+3. **Human review + CI (§4)** — the backstop that catches where the first two fall short.
+
+Compliance is a claim a human makes after checking **all ten** articles against
+the implementation — never something a dependency grants.
+
 ## 3. Put the rules in the agent's context
 
 Most constitutional rules are **judgment, not lint** — for agent-built
