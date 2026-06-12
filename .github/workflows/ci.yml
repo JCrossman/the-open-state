@@ -35,6 +35,12 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
+      # Defense-in-depth: fail fast if obvious PII (real-looking email/phone/SIN)
+      # slipped into a tracked file. Honestly partial — pairs with secret scanning
+      # (credentials) and review (everything else). Needs only node + git.
+      - name: PII tripwire
+        run: node scripts/check-pii.mjs
+
       - name: Install (frozen lockfile)
         run: pnpm install --frozen-lockfile
 
