@@ -19,8 +19,14 @@ reviewed against your implementation — never silent inheritance.
 ## 2. Inherit the load-bearing parts from the kit
 
 [`@open-state/kit`](kit/README.md) is the code embodiment of the Constitution's
-hardest requirements. Using it is how a project is compliant **by
-construction** rather than by re-implementation:
+hardest requirements, published on npm. Install and pin it:
+
+```bash
+npm install @open-state/kit       # then pin a version, e.g. "@open-state/kit": "^0.2.0"
+```
+
+Using it is how a project is compliant **by construction** rather than by
+re-implementation:
 
 | Requirement | Kit module |
 |---|---|

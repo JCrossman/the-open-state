@@ -24,6 +24,12 @@ API, its bookings/trips/appointments — stays in each implementation.
 
 ## Use
 
+Install from npm (public, no auth):
+
+```bash
+npm install @open-state/kit       # or: pnpm add @open-state/kit
+```
+
 ```ts
 import {
   saveSession, loadSession, clearSession, cookieHeader, cookieValue,
@@ -71,9 +77,10 @@ is not. Promote only what is *actually duplicated* across ≥2 implementations.
 
 Strict semver, and consumers **pin** it. The kit's public API is a conformance
 surface: a breaking change here is a governance act (like amending the
-Constitution), released deliberately, never casually. The kit is consumed via
-the pnpm workspace inside this repo today; external implementations consume a
-tagged release.
+Constitution), released deliberately, never casually. It is published to **npm
+as `@open-state/kit`** (the camping packages in this repo consume it via the
+pnpm workspace; external implementations install the npm release). Each release
+is cut by pushing a `kit-v*` tag, which the `publish-kit` workflow publishes.
 
 ## Tests
 
