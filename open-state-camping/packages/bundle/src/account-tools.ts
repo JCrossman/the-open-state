@@ -295,7 +295,7 @@ function changedFields(args: Record<string, any>): string[] {
 
 /**
  * Normalize a phone number to E.164 (+1… for Canada/US), the format Parks
- * Canada stores and requires — a raw "(647) 468-9893" or bare 10 digits is
+ * Canada stores and requires — a raw "(416) 555-0142" or bare 10 digits is
  * rejected with HTTP 400.
  */
 export function normalizePhone(raw: string): string {
