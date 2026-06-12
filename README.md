@@ -12,7 +12,7 @@ A citizen asks their assistant, in plain language, for what they need from a pub
 |---|---|
 | [`CONSTITUTION.md`](CONSTITUTION.md) | The binding commitments. Any implementation must meet these. |
 | [`CONFORMANCE.md`](CONFORMANCE.md) | How a project declares and inherits conformance — including the `AGENTS.md` stanza new projects paste in. |
-| [`kit/`](kit) — **@open-state/kit** | The Constitution's code embodiment: encrypted on-device session vault (Art. 1), the two-phase human-confirm gate (Art. 2), citizen-driven browser sign-in (Art. 10). Shared by every Open State implementation. |
+| [`kit/`](kit) — **[@open-state/kit](https://www.npmjs.com/package/@open-state/kit)** | The Constitution's code embodiment, **published on npm**: encrypted on-device session vault (Art. 1), the two-phase human-confirm gate (Art. 2), citizen-driven browser sign-in (Art. 10). Shared by every Open State implementation. |
 | [`open-state-camping/`](open-state-camping) | The first reference implementation: Parks Canada camping, end-to-end (all four booking families), as a local `.mcpb` MCP bundle. |
 
 Other implementations (more public services) live in their own repositories, pin a Constitution version, and consume the kit — see [`CONFORMANCE.md`](CONFORMANCE.md).
