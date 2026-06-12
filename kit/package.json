@@ -4,6 +4,19 @@
   "type": "module",
   "description": "The Civic Access Protocol kit: the code embodiment of The Open State Constitution. Encrypted on-device session vault (Art. 1), the two-phase human-confirm gate (Art. 2), and citizen-driven browser session capture (Art. 10) — shared by every Open State implementation.",
   "license": "MIT",
+  "homepage": "https://github.com/JCrossman/the-open-state/tree/main/kit#readme",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "civic-access-protocol",
+    "the-open-state",
+    "accessibility",
+    "session-vault",
+    "human-in-the-loop"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/JCrossman/the-open-state.git",
@@ -23,7 +36,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "pnpm run build"
   },
   "peerDependencies": {
     "puppeteer-core": ">=22"
