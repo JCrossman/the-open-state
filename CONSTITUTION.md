@@ -22,7 +22,7 @@ The Open State builds **assistive technology, not bots.** An implementation acts
 
 1.1. An implementation **MUST NOT** store, transmit, log, or retain a citizen’s credentials for any third-party or government service (passwords, security answers, government login secrets, long-lived session tokens).
 
-1.2. An implementation **MUST NOT** authenticate to a third-party or government service as the citizen on a server the citizen does not control.
+1.2. An implementation **MUST NOT** authenticate to a third-party or government service as the citizen from infrastructure the implementer controls (for example, a hosted backend). The restriction is on *where the authenticating happens*, not on which service is reached: the destination is, by nature, a service the citizen does not control, but the login itself **MUST** occur on a device the citizen controls (see 1.5).
 
 1.3. Where authenticated action is required, the credential or session **MUST** remain on the citizen’s own device or within a vault only the citizen can unlock.
 
@@ -46,7 +46,7 @@ The Open State builds **assistive technology, not bots.** An implementation acts
 
 3.2. Tool descriptions, inputs, and outputs **MUST** be in plain language.
 
-3.3. Where a service exposes accessibility attributes (accessible sites, accessible facilities, supports), the implementation **MUST** surface them as first-class, filterable, and clearly stated.
+3.3. Where a service exposes accessibility attributes (accessible sites, accessible facilities, supports), the implementation **MUST** surface them as first-class and clearly stated, and **MUST** let the citizen filter results by them — that is, restrict a search to only the accessible options, so a citizen who needs accessibility is not made to read through every result to find which ones qualify.
 
 3.4. The needs of people with disabilities, seniors, and newcomers **MUST** be treated as the primary design case, not as an afterthought.
 
@@ -117,5 +117,10 @@ The Open State builds **assistive technology, not bots.** An implementation acts
 An implementation is **Civic Access Protocol compliant** only if it satisfies every “MUST” and “MUST NOT” in Articles 1 through 10. “SHOULD” items are strong recommendations.
 
 This Constitution may be revised as the work and the technology mature. Revisions must strengthen, not weaken, the protections for citizens.
+
+## Revision history
+
+- **v1.0** — Initial Constitution (Articles 1–10).
+- **v1.1** — Clarifications only; no obligation changed or weakened. Article 1.2 now says explicitly that the forbidden login is one performed on the *implementer's* infrastructure (the destination is always a service the citizen does not control). Article 3.3 spells out that "filter" means letting the citizen restrict results to only the accessible options. An implementation compliant with v1.0 remains compliant with v1.1.
 
 *No citizen should be excluded from what is already theirs.*
