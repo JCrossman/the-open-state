@@ -1,0 +1,67 @@
+name: Release .mcpb
+
+# Build the Camping bundle's installable .mcpb and publish it as a GitHub Release
+# asset, so citizens can download + install it in Claude Desktop without a
+# toolchain. Manual dispatch only: a tag pushed by a workflow's GITHUB_TOKEN does
+# not trigger other workflows, so we drive this explicitly. The release tag
+# (camping-v<version>) is derived from the bundle's package.json so it can't drift.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Ref to build/release from"
+        required: true
+        default: "main"
+
+permissions:
+  contents: write # create the release + tag and upload the .mcpb asset
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Build bundle + pack .mcpb
+        working-directory: open-state-camping/packages/bundle
+        run: |
+          pnpm build
+          node scripts/build-mcpb.mjs
+          pnpm dlx @anthropic-ai/mcpb pack .mcpb-build open-state-camping.mcpb
+
+      - name: Read bundle version
+        id: v
+        run: echo "version=$(node -p "require('./open-state-camping/packages/bundle/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Create release with the .mcpb asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          tag="camping-v$VERSION"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists; uploading/overwriting the asset."
+            gh release upload "$tag" \
+              open-state-camping/packages/bundle/open-state-camping.mcpb --clobber
+          else
+            gh release create "$tag" \
+              open-state-camping/packages/bundle/open-state-camping.mcpb \
+              --target "$(git rev-parse HEAD)" \
+              --title "Camping $tag" \
+              --notes "The Open State: Camping — installable \`.mcpb\` bundle (v$VERSION). Download \`open-state-camping.mcpb\` below and add it in Claude Desktop → Settings → Extensions. Independent, not operated by or endorsed by Parks Canada; it never books or pays on its own."
+          fi
+          echo "Released $tag with open-state-camping.mcpb"
