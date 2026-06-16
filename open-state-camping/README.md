@@ -76,7 +76,13 @@ The server speaks MCP over stdio and waits for an assistant to connect.
 
 ## Install in Claude Desktop (the .mcpb)
 
-Build the bundle, then install it as a desktop extension:
+**Easiest — download the prebuilt bundle.** Grab `open-state-camping.mcpb` from the
+latest [**release**](https://github.com/JCrossman/the-open-state/releases?q=camping)
+(tagged `camping-v*`). In **Claude Desktop → Settings → Extensions**, install that
+file and restart. (When upgrading, remove the old version first, then install the
+new one.)
+
+**Or build it yourself** from source:
 
 ```bash
 # from open-state-camping/
@@ -85,9 +91,7 @@ node packages/bundle/scripts/build-mcpb.mjs
 pnpm dlx @anthropic-ai/mcpb pack packages/bundle/.mcpb-build packages/bundle/open-state-camping.mcpb
 ```
 
-In **Claude Desktop → Settings → Extensions**, install
-`packages/bundle/open-state-camping.mcpb` and restart. (When upgrading, remove the
-old version first, then install the new one.)
+Then install `packages/bundle/open-state-camping.mcpb` the same way.
 
 ## Connect it to Claude Code
 
