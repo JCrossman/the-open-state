@@ -36,10 +36,12 @@ jobs:
       - name: Install (frozen lockfile)
         run: pnpm install --frozen-lockfile
 
-      - name: Build bundle + pack .mcpb
-        working-directory: open-state-camping/packages/bundle
+      - name: Build workspace + pack .mcpb
         run: |
-          pnpm build
+          # Build the whole workspace first: the bundle imports @open-state/core
+          # and @open-state/kit, whose dist/ must exist before tsc/esbuild run.
+          pnpm -r build
+          cd open-state-camping/packages/bundle
           node scripts/build-mcpb.mjs
           pnpm dlx @anthropic-ai/mcpb pack .mcpb-build open-state-camping.mcpb
 
