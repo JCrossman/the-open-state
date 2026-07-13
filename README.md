@@ -2,7 +2,7 @@
 
 **Your services. Your assistant. Your access.**
 
-This repository is the home of the **Civic Access Protocol**, under the movement **The Open State**: making public services reachable by every citizen, through the AI assistant they already use, regardless of ability, age, or language. It holds the binding **Constitution**, the **@open-state/kit** library that embodies it in code, and the first reference implementation (Parks Canada camping).
+This repository is the home of the **Civic Access Protocol**, under the movement **The Open State**: making public services reachable by every citizen, through the AI assistant they already use, regardless of ability, age, or language. It holds the binding **Constitution** and the **@open-state/kit** library that embodies it in code; the first reference implementation (Parks Canada camping) lives in its own repository, [`can-fed-camp-mcp`](https://github.com/JCrossman/can-fed-camp-mcp).
 
 A citizen asks their assistant, in plain language, for what they need from a public service; the implementation searches, filters for accessibility, and *prepares* the action — the citizen confirms and completes it themselves. The citizen keeps their credentials and their control throughout.
 
@@ -13,7 +13,7 @@ A citizen asks their assistant, in plain language, for what they need from a pub
 | [`CONSTITUTION.md`](CONSTITUTION.md) | The binding commitments. Any implementation must meet these. |
 | [`CONFORMANCE.md`](CONFORMANCE.md) | How a project declares and inherits conformance — including the `AGENTS.md` stanza new projects paste in. |
 | [`kit/`](kit) — **[@open-state/kit](https://www.npmjs.com/package/@open-state/kit)** | The Constitution's code embodiment, **published on npm**: encrypted on-device session vault (Art. 1), the two-phase human-confirm gate (Art. 2), citizen-driven browser sign-in (Art. 10). Shared by every Open State implementation. |
-| [`open-state-camping/`](open-state-camping) | The first reference implementation: Parks Canada camping, end-to-end (all four booking families), as a local `.mcpb` MCP bundle. |
+| [`can-fed-camp-mcp`](https://github.com/JCrossman/can-fed-camp-mcp) | The first reference implementation: Parks Canada camping, end-to-end (all four booking families), as a local `.mcpb` MCP bundle. Lives in its own repository. |
 
 Other implementations (more public services) live in their own repositories, pin a Constitution version, and consume the kit — see [`CONFORMANCE.md`](CONFORMANCE.md).
 

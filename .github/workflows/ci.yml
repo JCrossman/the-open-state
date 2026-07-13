@@ -1,7 +1,7 @@
 name: CI
 
 # Gate every PR to main (and pushes to main) on a clean build + the offline test
-# suite, across the whole workspace (@open-state/kit + the camping packages).
+# suite for the @open-state/kit workspace package.
 # Tests never touch live public services — recorded fixtures only — so CI is
 # deterministic and never hammers an upstream (Constitution Art. 7.3).
 
@@ -26,7 +26,7 @@ jobs:
 
       # pnpm first, so setup-node's pnpm cache has a package manager to key on.
       # The version comes from the root packageManager field (pnpm@10.33.0);
-      # the workspace root is the repo root (kit + open-state-camping packages).
+      # the workspace root is the repo root (the @open-state/kit package).
       - uses: pnpm/action-setup@v6
 
       - uses: actions/setup-node@v6

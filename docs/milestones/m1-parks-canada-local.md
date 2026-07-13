@@ -7,7 +7,7 @@
 > (`packages/core` + `packages/bundle`); the Python/FastMCP/camply implementation and
 > the Azure remote preview have been **removed**. References to Python, camply,
 > FastMCP, SQLite, uv, or remote hosting below are historical. The authoritative,
-> current docs are [`open-state-camping/README.md`](../../open-state-camping/README.md)
+> current docs are the [`can-fed-camp-mcp` README](https://github.com/JCrossman/can-fed-camp-mcp/blob/main/README.md)
 > and [`docs/01-architecture.md`](../01-architecture.md).
 
 

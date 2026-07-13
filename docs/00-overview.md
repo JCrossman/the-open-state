@@ -4,7 +4,7 @@
 > built and live as a **TypeScript** local `.mcpb` bundle — all four booking families
 > search and book end-to-end. The original Python/camply plan and the Azure remote
 > preview have been removed. See
-> [`open-state-camping/README.md`](../open-state-camping/README.md) and
+> the [`can-fed-camp-mcp` README](https://github.com/JCrossman/can-fed-camp-mcp/blob/main/README.md) and
 > [`01-architecture.md`](01-architecture.md). Milestone tables below are historical.
 
 
