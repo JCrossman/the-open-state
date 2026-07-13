@@ -129,9 +129,11 @@ by humans (and agents carrying §3) on every PR.
 
 ## 5. Current conformance: this repo
 
-`open-state-camping` is the reference implementation. Its conformance posture,
+[`can-fed-camp-mcp`](https://github.com/JCrossman/can-fed-camp-mcp) is the
+reference implementation (in its own repository). Its conformance posture,
 including its honestly-recorded tensions (e.g. the browser-like User-Agent
 needed to function at all vs. Art. 7.3 "honest identification"), is documented
-in [`open-state-camping/README.md`](open-state-camping/README.md) under
+in its
+[README](https://github.com/JCrossman/can-fed-camp-mcp/blob/main/README.md) under
 "Honest notes and known limits". A conformance claim with no known-limits
 section is a red flag, not a clean bill.

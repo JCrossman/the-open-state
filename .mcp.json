@@ -1,8 +1,3 @@
 {
-  "mcpServers": {
-    "open-state-camping": {
-      "command": "node",
-      "args": ["open-state-camping/packages/bundle/dist/server.js"]
-    }
-  }
+  "mcpServers": {}
 }

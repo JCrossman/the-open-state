@@ -47,7 +47,7 @@ definition, in scope.
 ## What's not a vulnerability
 
 - The browser-like User-Agent the camping implementation sends (a documented,
-  honestly-recorded tension — see `open-state-camping/README.md` "Honest notes").
+  honestly-recorded tension — see the [`can-fed-camp-mcp` README](https://github.com/JCrossman/can-fed-camp-mcp/blob/main/README.md) "Honest notes").
 - Reports requiring physical access to an already-unlocked device, or the citizen's
   own deliberate misuse of their own session.
 - Findings against a third-party service (e.g. Parks Canada) rather than this code —

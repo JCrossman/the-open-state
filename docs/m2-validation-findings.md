@@ -6,7 +6,7 @@
 > capture in a local encrypted vault (no IdP, no remote OAuth). The FastMCP /
 > OAuth / Azure findings below are historical and no longer describe the build.
 > The authoritative, current docs are
-> [`open-state-camping/README.md`](../open-state-camping/README.md) and
+> the [`can-fed-camp-mcp` README](https://github.com/JCrossman/can-fed-camp-mcp/blob/main/README.md) and
 > [`docs/01-architecture.md`](01-architecture.md).
 
 **Status: research complete (May 2026). No code written against assumptions yet.**

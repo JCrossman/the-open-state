@@ -34,7 +34,8 @@ A pnpm + TypeScript workspace rooted at the repository root:
   (session vault, confirm gate, citizen-driven sign-in). Shared by every
   implementation; see [`CONFORMANCE.md`](CONFORMANCE.md). Its public API is a
   conformance surface — breaking changes are deliberate, versioned acts.
-- [`open-state-camping/`](open-state-camping) — the reference implementation:
+- [`can-fed-camp-mcp`](https://github.com/JCrossman/can-fed-camp-mcp) — the
+  reference implementation, in its own repository:
   - `packages/core` — the provider, booking-cart assembly, availability, policies.
   - `packages/bundle` — the local MCP server (stdio) and the `.mcpb` packaging.
 

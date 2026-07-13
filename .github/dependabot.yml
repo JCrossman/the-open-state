@@ -9,7 +9,7 @@
 # Every PR still runs the full CI gate (build + test + PII tripwire + CodeQL).
 version: 2
 updates:
-  # The pnpm/TypeScript workspace (root lockfile covers kit + camping packages).
+  # The pnpm/TypeScript workspace (root lockfile covers the @open-state/kit package).
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
