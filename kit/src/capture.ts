@@ -39,6 +39,8 @@ export interface CaptureOptions extends LaunchOptions {
   pollMs?: number;
   /** Human name of the service for error messages (default: the provider). */
   serviceName?: string;
+  /** Cancel an in-progress capture, closing its browser without returning cookies. */
+  signal?: AbortSignal;
 }
 
 /**
@@ -71,6 +73,7 @@ export async function launchCitizenBrowser(opts: LaunchOptions): Promise<Browser
  */
 export async function captureSession(opts: CaptureOptions): Promise<Session> {
   const service = opts.serviceName ?? opts.provider;
+  throwIfAborted(opts.signal, service);
   let browser: Browser;
   try {
     browser = await launchCitizenBrowser(opts);
@@ -84,7 +87,12 @@ export async function captureSession(opts: CaptureOptions): Promise<Session> {
     );
   }
 
+  const closeOnAbort = () => {
+    void browser.close();
+  };
+  opts.signal?.addEventListener("abort", closeOnAbort, { once: true });
   try {
+    throwIfAborted(opts.signal, service);
     const page = (await browser.pages())[0] ?? (await browser.newPage());
     await page.evaluateOnNewDocument(() => {
       // Some federated IdPs distrust a webdriver flag even when a human types.
@@ -93,8 +101,10 @@ export async function captureSession(opts: CaptureOptions): Promise<Session> {
     await page.goto(opts.loginUrl, { waitUntil: "domcontentloaded" });
 
     await waitForSignIn(page, opts);
+    throwIfAborted(opts.signal, service);
 
     const raw = await page.cookies(opts.cookieOrigin);
+    throwIfAborted(opts.signal, service);
     const cookies: StoredCookie[] = raw.map((c) => ({
       name: c.name,
       value: c.value,
@@ -110,6 +120,7 @@ export async function captureSession(opts: CaptureOptions): Promise<Session> {
       capturedAt: new Date().toISOString(),
     };
   } finally {
+    opts.signal?.removeEventListener("abort", closeOnAbort);
     await browser.close().catch(() => {});
   }
 }
@@ -118,12 +129,44 @@ async function waitForSignIn(page: Page, opts: CaptureOptions): Promise<void> {
   const deadline = Date.now() + (opts.timeoutMs ?? 5 * 60_000);
   const poll = opts.pollMs ?? 2_500;
   while (Date.now() < deadline) {
+    throwIfAborted(opts.signal, opts.serviceName ?? opts.provider);
     const signedIn = await opts.isSignedIn(page).catch(() => false);
     if (signedIn) return;
-    await new Promise((res) => setTimeout(res, poll));
+    await abortableDelay(poll, opts.signal, opts.serviceName ?? opts.provider);
   }
   throw new Error(
     "I waited but didn't see a completed sign-in. When you're ready, run " +
       "connect_account again and finish signing in.",
+  );
+}
+
+function abortableDelay(
+  ms: number,
+  signal: AbortSignal | undefined,
+  service: string,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(done, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+      reject(captureCanceled(service));
+    };
+    function done() {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }
+    signal?.addEventListener("abort", onAbort, { once: true });
+    if (signal?.aborted) onAbort();
+  });
+}
+
+function throwIfAborted(signal: AbortSignal | undefined, service: string): void {
+  if (signal?.aborted) throw captureCanceled(service);
+}
+
+function captureCanceled(service: string): Error {
+  return new Error(
+    `The ${service} sign-in was canceled because authentication state was disconnected.`,
   );
 }
