@@ -22,7 +22,7 @@ reviewed against your implementation — never silent inheritance.
 hardest requirements, published on npm. Install and pin it:
 
 ```bash
-npm install @open-state/kit       # then pin a version, e.g. "@open-state/kit": "^0.2.0"
+npm install @open-state/kit       # then pin an exact version, e.g. "@open-state/kit": "1.0.0"
 ```
 
 Using it is how a project is compliant **by construction** rather than by

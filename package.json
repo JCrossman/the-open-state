@@ -1,9 +1,9 @@
 {
   "name": "the-open-state",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "The Open State — the Civic Access Protocol: the Constitution, the @open-state/kit conformance library, and the Camping reference implementation.",
-  "packageManager": "pnpm@10.33.0",
+  "packageManager": "pnpm@10.34.3",
   "engines": {
     "node": ">=20"
   },

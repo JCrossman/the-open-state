@@ -1,22 +1,12 @@
 /**
- * The two-phase human-confirm gate — Constitution Article 2.
+ * The trusted human-confirm gate — Constitution Article 2.
  *
- * Any action with consequences for the citizen (a booking, a submission, a
- * cancellation) is delivered as ONE tool with two phases:
- *
- *   1. Called without `confirm`: the implementation fully *prepares and
- *      describes* the action in plain language. Nothing is held, written,
- *      or charged (Arts. 2.2, 2.3).
- *   2. Called again with `confirm: true` — only after the citizen has seen the
- *      preview and explicitly agreed: the action is executed up to, and never
- *      past, the citizen's own final step (payment, submission).
- *
- * This module is the standard wrapper for that shape so every Open State
- * implementation gates consequential actions the same way and words the
- * guarantee the same way. It is deliberately tiny: the domain work stays in
- * the implementation's `prepare`/`execute`; the gate owns only the phase
- * routing and the constitutional wording.
+ * The model may request a consequential tool, but it cannot authorize one.
+ * After preparation, the implementation asks its trusted MCP host to show the
+ * exact preview to the citizen. Execution occurs only when that host reports an
+ * explicit citizen acceptance and the citizen/session context is unchanged.
  */
+import { createHash, timingSafeEqual } from "node:crypto";
 
 /** The MCP text result every Open State tool returns. */
 export type TextResult = { content: { type: "text"; text: string }[] };
@@ -27,60 +17,164 @@ export const text = (s: string): TextResult => ({ content: [{ type: "text", text
 export interface TwoPhaseOutcome<TPrepared = unknown> {
   /** Plain-language description of exactly what will happen (Art. 2.3). */
   summary: string;
-  /**
-   * What confirming does and where the citizen's own final step is, e.g.
-   * "confirm and I'll hold the site and open your cart so you can review and
-   * pay yourself". Appended to the standard preview footer.
-   */
+  /** Plain-language description of what acceptance authorizes. */
   onConfirm: string;
-  /**
-   * Context computed during prepare that execute needs (the assembled request,
-   * the account envelope, …). Threaded straight through so phase 2 never has to
-   * recompute — and so the thing the citizen previewed is exactly the thing
-   * executed (no chance of drift between the two phases).
-   */
+  /** Domain context computed without causing the consequential action. */
   prepared?: TPrepared;
 }
 
 export interface TwoPhaseAction<TArgs, TPrepared = unknown> {
   /**
-   * Phase 1: validate and fully prepare, but hold/write/charge NOTHING.
-   * Return the plain-language summary (with any computed context on `prepared`),
-   * or a problem string to show instead (a validation failure is a normal
-   * outcome, not an exception — Art. 7.2).
+   * Validate and fully prepare, but hold/write/charge nothing. Validation
+   * failures are normal visible outcomes, not exceptions (Art. 7.2).
    */
   prepare(args: TArgs): Promise<TwoPhaseOutcome<TPrepared> | { problem: string }>;
   /**
-   * Phase 2: the citizen has confirmed. Execute up to — never past — the
-   * citizen's own final step, using the context prepared in phase 1, and report
-   * plainly what happened.
+   * Execute the snapshotted preview up to — never past — the citizen's final
+   * step. Both arguments are defensive copies retained before approval.
    */
   execute(args: TArgs, prepared: TwoPhaseOutcome<TPrepared>): Promise<string>;
 }
 
-/** The standard Art. 2 preview footer, shared verbatim by implementations. */
+export interface ApprovalRequest {
+  summary: string;
+  onConfirm: string;
+}
+
+export type ApprovalDecision = "accept" | "decline" | "cancel" | "unavailable";
+
+export interface ConfirmationGateOptions {
+  /**
+   * Stable, non-secret identifier for the current citizen/session context.
+   * Implementations should hash credential material before returning it.
+   */
+  context(): string | Promise<string>;
+  /**
+   * Trusted host interaction that presents the preview directly to the citizen.
+   * This MUST NOT be implemented by asking the model to assert confirmation.
+   */
+  approve(request: ApprovalRequest): Promise<ApprovalDecision>;
+  /**
+   * Shared exclusive runner used by every consequential action and session
+   * mutation in an implementation. The gate holds it across the final context
+   * check and execution, closing account-switch TOCTOU races.
+   */
+  exclusive<T>(operation: () => Promise<T>): Promise<T>;
+}
+
+/** Standard Art. 2 wording used by trusted approval interfaces. */
 export function previewFooter(onConfirm: string): string {
   return (
-    "\n\nThis is a preview — nothing has been held, submitted, or charged. " +
-    `If everything is right, ${onConfirm}. You make the final decision; ` +
-    "I never complete it on my own."
+    "\n\nNothing has been held, submitted, or charged. " +
+    `Approve only if everything is right: ${onConfirm}. You make the final ` +
+    "decision; I never complete it on my own."
   );
 }
 
 /**
- * Turn a TwoPhaseAction into an MCP tool handler. The tool's input schema must
- * include an optional boolean `confirm` (described as "Only true after the
- * citizen has seen the summary and confirmed").
+ * Turn a consequential action into a trusted prepare/approve/execute handler.
+ *
+ * There is no caller-controlled `confirm` parameter or model-visible
+ * capability. The approval callback must be a host-side citizen interaction,
+ * such as MCP elicitation.
  */
-export function confirmGated<TArgs extends { confirm?: boolean }, TPrepared = unknown>(
+export function confirmGated<TArgs, TPrepared = unknown>(
   action: TwoPhaseAction<TArgs, TPrepared>,
+  options: ConfirmationGateOptions,
 ): (args: TArgs) => Promise<TextResult> {
-  return async (args: TArgs): Promise<TextResult> => {
-    const prepared = await action.prepare(args);
-    if ("problem" in prepared) return text(prepared.problem);
-    if (!args.confirm) {
-      return text(prepared.summary + previewFooter(prepared.onConfirm));
+  return async (callerArgs: TArgs): Promise<TextResult> => {
+    const preparedState = await options.exclusive(async () => {
+      const initialContext = contextDigest(await options.context());
+      const previewArgs = clone(callerArgs, "tool arguments");
+      const prepared = await action.prepare(previewArgs);
+      if ("problem" in prepared) {
+        return { kind: "problem" as const, problem: prepared.problem };
+      }
+      const afterPrepare = contextDigest(await options.context());
+      if (!buffersEqual(initialContext, afterPrepare)) {
+        return { kind: "context-changed" as const };
+      }
+      return {
+        kind: "ready" as const,
+        snapshot: clone(prepared, "prepared preview"),
+        executionArgs: clone(previewArgs, "prepared tool arguments"),
+        initialContext,
+      };
+    });
+    if (preparedState.kind === "problem") return text(preparedState.problem);
+    if (preparedState.kind === "context-changed") {
+      return text(
+        "The connected account or session changed while I prepared the preview, " +
+          "so I did not continue. Run the action again to review fresh details.",
+      );
     }
-    return text(await action.execute(args, prepared));
+
+    const decision = await options.approve({
+      summary: preparedState.snapshot.summary,
+      onConfirm: preparedState.snapshot.onConfirm,
+    });
+    if (decision !== "accept") {
+      return text(
+        decision === "decline"
+          ? "You declined the preview. I did not perform the action."
+          : decision === "unavailable"
+            ? "Your MCP host does not support trusted confirmation, so I did not " +
+              "perform the action. Use a host with MCP form elicitation support."
+            : "Confirmation was cancelled. I did not perform the action.",
+      );
+    }
+
+    return options.exclusive(async () => {
+      const currentContext = contextDigest(await options.context());
+      if (!buffersEqual(preparedState.initialContext, currentContext)) {
+        return text(
+          "The connected account or session changed while you were reviewing the " +
+            "preview, so I did not perform the action. Run it again to review fresh details.",
+        );
+      }
+      return text(
+        await action.execute(preparedState.executionArgs, preparedState.snapshot),
+      );
+    });
   };
+}
+
+export type ExclusiveRunner = <T>(operation: () => Promise<T>) => Promise<T>;
+
+/** Create a fair process-local exclusive runner for session-bound operations. */
+export function createExclusiveRunner(): ExclusiveRunner {
+  let tail = Promise.resolve();
+  return async <T>(operation: () => Promise<T>): Promise<T> => {
+    let release!: () => void;
+    const previous = tail;
+    tail = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      release();
+    }
+  };
+}
+
+function clone<T>(value: T, label: string): T {
+  try {
+    return structuredClone(value);
+  } catch (err) {
+    throw new TypeError(
+      `The ${label} must contain only structured-cloneable data: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
+}
+
+function contextDigest(context: string): Buffer {
+  return createHash("sha256").update(context).digest();
+}
+
+function buffersEqual(left: Buffer, right: Buffer): boolean {
+  return left.length === right.length && timingSafeEqual(left, right);
 }

@@ -26,8 +26,13 @@ export {
 } from "./vault.js";
 export {
   confirmGated,
+  createExclusiveRunner,
   previewFooter,
   text,
+  type ConfirmationGateOptions,
+  type ApprovalDecision,
+  type ApprovalRequest,
+  type ExclusiveRunner,
   type TextResult,
   type TwoPhaseAction,
   type TwoPhaseOutcome,
