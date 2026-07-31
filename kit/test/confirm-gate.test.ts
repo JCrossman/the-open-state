@@ -1,81 +1,250 @@
 import { describe, expect, it } from "vitest";
-import { confirmGated, previewFooter, type TwoPhaseAction } from "../src/confirm-gate.js";
+import {
+  confirmGated,
+  createExclusiveRunner,
+  previewFooter,
+  type ApprovalDecision,
+  type TwoPhaseAction,
+} from "../src/confirm-gate.js";
 
 interface Args {
   what: string;
-  confirm?: boolean;
 }
 
-function action(executed: string[]): TwoPhaseAction<Args> {
+function action(
+  executed: string[],
+  prepareCalls = { count: 0 },
+  prepared = { exact: "form A" },
+): TwoPhaseAction<Args, { exact: string }> {
   return {
     async prepare(args) {
+      prepareCalls.count += 1;
       if (args.what === "bad") return { problem: "That item doesn't exist." };
+      prepared.exact = args.what;
       return {
         summary: `Here's what I'll do: submit ${args.what}.`,
-        onConfirm: "confirm and I'll submit it for your review",
+        onConfirm: "submit it for your review",
+        prepared,
       };
     },
-    async execute(args) {
-      executed.push(args.what);
-      return `Submitted ${args.what} — review and finish it yourself.`;
+    async execute(args, outcome) {
+      executed.push(outcome.prepared!.exact);
+      return `Submitted ${args.what}.`;
     },
   };
 }
 
-describe("confirm gate (Constitution Art. 2)", () => {
-  it("without confirm: previews only, executes nothing", async () => {
-    const executed: string[] = [];
-    const handler = confirmGated(action(executed));
-    const out = await handler({ what: "form A" });
-    const t = out.content[0]!.text;
-    expect(t).toContain("Here's what I'll do: submit form A.");
-    expect(t).toContain("nothing has been held, submitted, or charged");
-    expect(t).toContain("never complete it on my own");
-    expect(executed).toEqual([]); // Art. 2.2: prepared, not performed
+function gate(
+  actionValue: TwoPhaseAction<Args, { exact: string }>,
+  approve: () => ApprovalDecision | Promise<ApprovalDecision>,
+  context = () => "session-a",
+) {
+  return confirmGated(actionValue, {
+    context,
+    approve: async () => approve(),
+    exclusive: createExclusiveRunner(),
   });
+}
 
-  it("with confirm: executes and reports plainly", async () => {
+describe("confirm gate (Constitution Art. 2)", () => {
+  it("executes only after a trusted acceptance", async () => {
     const executed: string[] = [];
-    const handler = confirmGated(action(executed));
-    const out = await handler({ what: "form A", confirm: true });
+    const handler = gate(action(executed), () => "accept");
+    const out = await handler({ what: "form A" });
     expect(out.content[0]!.text).toContain("Submitted form A");
     expect(executed).toEqual(["form A"]);
   });
 
-  it("a prepare problem is a normal outcome (Art. 7.2), not an execution", async () => {
+  it.each(["decline", "cancel", "unavailable"] as const)(
+    "performs nothing when trusted approval returns %s",
+    async (decision) => {
+      const executed: string[] = [];
+      const handler = gate(action(executed), () => decision);
+      const out = await handler({ what: "form A" });
+      expect(out.content[0]!.text).toContain("did not perform");
+      expect(executed).toEqual([]);
+    },
+  );
+
+  it("shows the exact summary through the trusted approval callback", async () => {
+    const seen: string[] = [];
+    const handler = confirmGated(action([]), {
+      context: () => "session-a",
+      approve: async (request) => {
+        seen.push(request.summary, request.onConfirm);
+        return "decline";
+      },
+      exclusive: createExclusiveRunner(),
+    });
+    await handler({ what: "form A" });
+    expect(seen).toEqual([
+      "Here's what I'll do: submit form A.",
+      "submit it for your review",
+    ]);
+  });
+
+  it("rejects acceptance if the session context changes during review", async () => {
     const executed: string[] = [];
-    const handler = confirmGated(action(executed));
-    const out = await handler({ what: "bad", confirm: true });
+    let context = "session-a";
+    const handler = gate(
+      action(executed),
+      () => {
+        context = "session-b";
+        return "accept";
+      },
+      () => context,
+    );
+    const out = await handler({ what: "form A" });
+    expect(out.content[0]!.text).toContain("session changed");
+    expect(executed).toEqual([]);
+  });
+
+  it("rejects a session change during preparation", async () => {
+    let context = "session-a";
+    let approvals = 0;
+    const handler = confirmGated<Args>(
+      {
+        async prepare(args) {
+          context = "session-b";
+          return { summary: args.what, onConfirm: "submit it" };
+        },
+        async execute() {
+          return "should not execute";
+        },
+      },
+      {
+        context: () => context,
+        approve: async () => {
+          approvals += 1;
+          return "accept";
+        },
+        exclusive: createExclusiveRunner(),
+      },
+    );
+    const out = await handler({ what: "form A" });
+    expect(out.content[0]!.text).toContain("changed while I prepared");
+    expect(approvals).toBe(0);
+  });
+
+  it("snapshots prepared data before approval", async () => {
+    const executed: string[] = [];
+    const shared = { exact: "initial" };
+    const handler = gate(action(executed, { count: 0 }, shared), () => {
+      shared.exact = "mutated after preview";
+      return "accept";
+    });
+    await handler({ what: "form A" });
+    expect(executed).toEqual(["form A"]);
+  });
+
+  it("snapshots caller arguments before preparation and execution", async () => {
+    const executed: string[] = [];
+    const args = { what: "form A" };
+    const handler = gate(action(executed), () => {
+      args.what = "form B";
+      return "accept";
+    });
+    const out = await handler(args);
+    expect(out.content[0]!.text).toContain("Submitted form A");
+    expect(executed).toEqual(["form A"]);
+  });
+
+  it("prepares exactly once", async () => {
+    const prepareCalls = { count: 0 };
+    const handler = gate(action([], prepareCalls), () => "accept");
+    await handler({ what: "form A" });
+    expect(prepareCalls.count).toBe(1);
+  });
+
+  it("returns prepare problems without requesting approval", async () => {
+    let approvals = 0;
+    const handler = gate(action([]), () => {
+      approvals += 1;
+      return "accept";
+    });
+    const out = await handler({ what: "bad" });
     expect(out.content[0]!.text).toBe("That item doesn't exist.");
-    expect(executed).toEqual([]); // even with confirm, a failed prepare never executes
+    expect(approvals).toBe(0);
+  });
+
+  it("rejects non-cloneable prepared values before approval", async () => {
+    let approvals = 0;
+    const handler = confirmGated<Args, { callback: () => void }>(
+      {
+        async prepare() {
+          return {
+            summary: "Preview",
+            onConfirm: "perform it",
+            prepared: { callback: () => {} },
+          };
+        },
+        async execute() {
+          return "should not execute";
+        },
+      },
+      {
+        context: () => "session-a",
+        approve: async () => {
+          approvals += 1;
+          return "accept";
+        },
+        exclusive: createExclusiveRunner(),
+      },
+    );
+    await expect(handler({ what: "form A" })).rejects.toThrow(TypeError);
+    expect(approvals).toBe(0);
   });
 
   it("previewFooter words the guarantee consistently", () => {
-    const f = previewFooter("confirm and I'll hold the site");
-    expect(f).toContain("confirm and I'll hold the site");
-    expect(f).toContain("You make the final decision");
+    const footer = previewFooter("hold the site");
+    expect(footer).toContain("Nothing has been held");
+    expect(footer).toContain("You make the final decision");
   });
 
-  it("threads prepared context from phase 1 to phase 2 (no recompute)", async () => {
-    let prepareCalls = 0;
-    const handler = confirmGated<{ n: number; confirm?: boolean }, { doubled: number }>({
-      async prepare(args) {
-        prepareCalls += 1;
-        return {
-          summary: `I'll process ${args.n}.`,
-          onConfirm: "confirm and I'll process it",
-          prepared: { doubled: args.n * 2 },
-        };
-      },
-      async execute(_args, outcome) {
-        // Phase 2 uses exactly what phase 1 computed — no second prepare pass.
-        return `Processed using ${outcome.prepared!.doubled}.`;
-      },
+  it("holds the exclusive lease across final context check and execution", async () => {
+    const exclusive = createExclusiveRunner();
+    let context = "session-a";
+    let executionStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      executionStarted = resolve;
     });
-    await handler({ n: 21 }); // preview
-    const out = await handler({ n: 21, confirm: true }); // execute
-    expect(out.content[0]!.text).toBe("Processed using 42.");
-    // Each call prepares once; execute reuses that outcome, never re-preparing.
-    expect(prepareCalls).toBe(2);
+    let finishExecution!: () => void;
+    const finish = new Promise<void>((resolve) => {
+      finishExecution = resolve;
+    });
+    const executed: string[] = [];
+    const handler = confirmGated<Args>(
+      {
+        async prepare(args) {
+          return { summary: args.what, onConfirm: "submit it" };
+        },
+        async execute(args) {
+          executionStarted();
+          await finish;
+          executed.push(args.what);
+          return "done";
+        },
+      },
+      {
+        context: () => context,
+        approve: async () => "accept",
+        exclusive,
+      },
+    );
+
+    const actionPromise = handler({ what: "form A" });
+    await started;
+    let mutationFinished = false;
+    const mutation = exclusive(async () => {
+      context = "session-b";
+      mutationFinished = true;
+    });
+    await Promise.resolve();
+    expect(mutationFinished).toBe(false);
+    finishExecution();
+    await actionPromise;
+    await mutation;
+    expect(executed).toEqual(["form A"]);
+    expect(context).toBe("session-b");
   });
 });

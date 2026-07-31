@@ -19,7 +19,7 @@ API, its bookings/trips/appointments — stays in each implementation.
 | Module | Constitution | What it gives you |
 |---|---|---|
 | `vault` | Art. 1 (citizen sovereignty over credentials) | AES-256-GCM encrypted on-device session store. Key in a 0600 file beside the vault or a named env var. Tampering/corruption fails closed (reads as "no session"). No identity, no passwords — only cookies. |
-| `confirm-gate` | Art. 2 (the human decides) | The standard two-phase tool shape: `prepare()` fully describes in plain language and holds **nothing**; only an explicit `confirm: true` reaches `execute()`, which stops at the citizen's own final step. Standardized preview wording. |
+| `confirm-gate` | Art. 2 (the human decides) | `prepare()` holds nothing; the trusted MCP host shows its snapshotted preview directly to the citizen. Only explicit host-reported acceptance reaches `execute()`, which stops at the citizen's final step. |
 | `capture` | Arts. 1, 10 (assistive technology, not a bot) | Opens the **citizen's own Chrome** at the service's sign-in page; the citizen logs in themselves (and passes any human gate themselves, Art. 10.2). The implementation supplies only the service-specific "signed in" signal; the cookies go straight to the vault. |
 
 ## Use
@@ -33,8 +33,10 @@ npm install @open-state/kit       # or: pnpm add @open-state/kit
 ```ts
 import {
   saveSession, loadSession, clearSession, cookieHeader, cookieValue,
-  captureSession, confirmGated, previewFooter, text,
+  captureSession, confirmGated, createExclusiveRunner, previewFooter, text,
 } from "@open-state/kit";
+
+const sessionExclusive = createExclusiveRunner();
 
 const VAULT = { dir: process.env.MY_HOME ?? defaultVaultDir("my-service"),
                 keyEnvVar: "MY_SESSION_KEY" };
@@ -50,18 +52,35 @@ const session = await captureSession({
 saveSession(session, VAULT);
 
 // A consequential action: one tool, two phases (Art. 2).
-const handler = confirmGated({
-  async prepare(args) {
-    // validate + assemble; hold/write/charge NOTHING
-    return { summary: "Here's the booking I'll prepare: …",
-             onConfirm: "confirm and I'll hold it and open your cart to pay yourself" };
+const handler = confirmGated(
+  {
+    async prepare(args) {
+      // validate + assemble; hold/write/charge NOTHING
+      return { summary: "Here's the booking I'll prepare: …",
+               onConfirm: "confirm and I'll hold it and open your cart to pay yourself" };
+    },
+    async execute(args, prepared) {
+      // args + prepared are the exact values retained from the preview
+      return "Your cart is ready — review and pay yourself.";
+    },
   },
-  async execute(args, prepared) {
-    // perform up to — never past — the citizen's own final step
-    return "Your cart is ready — review and pay yourself.";
+  {
+    // Return a non-secret digest identifying the current citizen/session.
+    context: () => currentSessionFingerprint(),
+    // Use a trusted host interaction such as MCP elicitation. Never ask the
+    // model to assert that the citizen confirmed.
+    approve: (preview) => requestCitizenApproval(preview),
+    // The same runner must wrap every session save/clear in the implementation.
+    exclusive: sessionExclusive,
   },
-});
+);
 ```
+
+The approval callback is the security boundary. It must present `summary` and
+`onConfirm` through a trusted citizen-facing interaction such as MCP form
+elicitation. Tool arguments, model prose, and tool annotations are never proof
+of consent. The gate snapshots arguments and prepared data before approval and
+fails if the connected session changes while the citizen reviews the preview.
 
 `puppeteer-core` is an **optional peer dependency**, loaded lazily — consumers
 that never capture a session never load it.
