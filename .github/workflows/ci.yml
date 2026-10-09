@@ -22,7 +22,7 @@ jobs:
   build-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # pnpm first, so setup-node's pnpm cache has a package manager to key on.
       # The version comes from the root packageManager field (pnpm@10.33.0);
